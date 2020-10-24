@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>阅读 on 沉思录</title>
+    <link>https://www.meditations.ink/tags/%E9%98%85%E8%AF%BB/</link>
+    <description>Recent content in 阅读 on 沉思录</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Sun, 23 Jun 2019 16:47:07 +0800</lastBuildDate>
+    
+	<atom:link href="https://www.meditations.ink/tags/%E9%98%85%E8%AF%BB/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>人类误判心理学脑图</title>
+      <link>https://www.meditations.ink/posts/poor-charlie-almanack/</link>
+      <pubDate>Sun, 23 Jun 2019 16:47:07 +0800</pubDate>
+      
+      <guid>https://www.meditations.ink/posts/poor-charlie-almanack/</guid>
+      <description>人类误判心理学脑图 这些天将查理.芒格的穷查理宝典读完了，查理在书中总结了25条人类容易产生误判的倾向，这些倾向被查理统称为人类误判心理学。在我来看这些思维误区，其实在社会心理学的教材里都有涉及并且更为</description>
+    </item>
+    
+    <item>
+      <title>代码大全摘抄</title>
+      <link>https://www.meditations.ink/posts/codecomplete/</link>
+      <pubDate>Tue, 21 May 2019 17:49:44 +0800</pubDate>
+      
+      <guid>https://www.meditations.ink/posts/codecomplete/</guid>
+      <description>项目的初期、中期、末期都强调质量 在接触一个系统之前：你需要理解“这个系统应该做什么”，以及“它该如何做” 在我看来，软件的首要技术使命便是管理复杂度 从问题的领域着手，而不是从底层实现细节入手去编写程序，</description>
+    </item>
+    
+  </channel>
+</rss>

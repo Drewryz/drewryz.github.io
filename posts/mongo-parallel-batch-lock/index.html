@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="zh-cn" >
+<head>
+  <meta charset="utf-8"/>
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+
+  
+  <meta name="author"
+        content="YZR"/>
+
+  
+  <meta name="description" content="背景 MongoDB是一个分布式数据库，底层数据通过Raft协议复制，原生支持数据强一致性以及分布式事务，支持副本集自动failover。一个典型的MongoDB集群拓扑如下图所示： mongos是代理层"/>
+  
+
+  
+  
+  <meta name="keywords" content="Hugo, theme, zozo"/>
+  
+
+  
+  <link rel="canonical" href="https://www.meditations.ink/posts/mongo-parallel-batch-lock/"/>
+
+  
+
+  <title>MongoDB跨机房自动failover：并行复制全局锁造成的QPS掉底原因分析与解决 &middot; 沉思录</title>
+
+  <link rel="shortcut icon" href="https://www.meditations.ink/images/favicon.ico"/>
+  <link rel="stylesheet" href="https://www.meditations.ink/css/animate.min.css"/>
+  <link rel="stylesheet" href="https://www.meditations.ink/css/remixicon.css"/>
+  <link rel="stylesheet" href="https://www.meditations.ink/css/zozo.css"/>
+  <link rel="stylesheet" href="https://www.meditations.ink/css/highlight.css"/>
+
+  
+  
+</head>
+
+<body>
+<div class="main animated">
+  <div class="nav_container animated fadeInDown">
+  <div class="site_nav" id="site_nav">
+    <ul>
+      
+      <li>
+        <a href="/">首页</a>
+      </li>
+      
+      <li>
+        <a href="/posts/">归档</a>
+      </li>
+      
+      <li>
+        <a href="/tags/">标签</a>
+      </li>
+      
+      <li>
+        <a href="/about/">关于</a>
+      </li>
+      
+    </ul>
+  </div>
+  <div class="menu_icon">
+    <a id="menu_icon"><i class="remixicon-links-line"></i></a>
+  </div>
+</div>
+
+  <div class="header animated fadeInDown">
+  <div class="site_title_container">
+    <div class="site_title">
+      <h1>
+        <a href="https://www.meditations.ink">
+          <span>沉思录</span>
+          <img src="https://www.meditations.ink/images/logo.svg"/>
+        </a>
+      </h1>
+    </div>
+    <div class="description">
+      <p class="sub_title">Follow me</p>
+      <div class="my_socials">
+        
+        
+        <a href="https://github.com/Drewryz" title="github" target="_blank"><i class="remixicon-github-fill"></i></a>
+        
+        
+        <a href="https://www.meditations.ink/index.xml" type="application/rss+xml" title="rss" target="_blank"><i class="remixicon-rss-fill"></i></a>
+      </div>
+    </div>
+  </div>
+</div>
+
+  <div class="content">
+    <div class="post_page">
+      <div class="post animated fadeInDown">
+        <div class="post_title post_detail_title">
+          <h2><a href='/posts/mongo-parallel-batch-lock/'>MongoDB跨机房自动failover：并行复制全局锁造成的QPS掉底原因分析与解决</a></h2>
+          <span class="date">2020.07.23</span>
+        </div>
+        <div class="post_content markdown">
+
+<h2 id="背景">背景</h2>
+
+<p>MongoDB是一个分布式数据库，底层数据通过Raft协议复制，原生支持数据强一致性以及分布式事务，支持副本集自动failover。一个典型的MongoDB集群拓扑如下图所示：
+<img src="/mongo-parallel-batch-lock/mongos架构-3.jpg" alt="3550b65921679ad56ffaabe949b176c9.jpeg" /><br />
+mongos是代理层，用于对用户的请求做路由。存储集群一般由三个节点组成，且通过Raft复制数据，选主后，Primary节点处理用户所有的写请求，Secondary节点基于Raft协议拉取Primary节点的oplog(类似MySQL binlog)，进行数据回放，完成数据复制。为了保证数据的强一致性，从理论上说，Raft协议要求Primary节点处理用户的所有请求，包括读操作和写操作，并且只有当写操作写入多数节点才向用户返回数据写入成功。但是数据一致性与数据库性能(吞吐、时延)往往是不可兼顾的，对于一个多节点的存储集群来说，强一致性需要更多的网络交互与数据等待，因此会造成query时延的升高。在工程实践上，几乎所有的基于Raft协议实现failover的存储产品都会对Raft做出一些改动，引入更加&quot;松弛&quot;的数据一致性约束，来换取更好的性能。MongoDB也不例外，但是它对用户提供了一个更加灵活和友好的一致性视图：对于一条query的一致性强弱，可以通过用户自身灵活控制。
+近期有业务方对Mongo的跨机房failover提出了需求，由于MongoDB底层采用Raft进行复制数据，因此原生支持跨机房failover，我们根据业务的需求，搭建了大致如下的集群拓扑用于测试，集群的MongoDB版本为3.6, 数据节点和配置节点分别有5个，且都为1主4从，两个mongos是流量的入口。<br />
+<img src="/mongo-parallel-batch-lock/压测拓扑-第 6 页 (2).jpg" alt="a6c513b3be0adbff401e01f66e3e89af.jpeg" /><br />
+压测工具采用MongoDB官方推荐的YCSB。由于Raft是一个单主协议，Primary节点需要处理用户所有写操作，所以它的压力相比Secondary节点更大。对于读一致性要求不是很严格的业务场景(允许读到一部分stale数据)，会选择将读请求发送到Secondary节点上，实现读写分离。所以，我们在配置脚本中开启了读写分离，读请求优先发往Secondary节点。对于写操作我们配置为写到多数节点返回成功，这保证了数据的可靠性。压测脚本如下：</p>
+
+<pre><code>mongodb.url=mongodb://mongo_uri/mongo_bench_mark?readPreference=secondaryPreferred&amp;w=majority&amp;journal=true&amp;maxPoolSize=30&amp;minPoolSize=50
+recordcount=20000000
+operationcount=500000000
+workload=site.ycsb.workloads.CoreWorkload
+readallfields=true
+readproportion=0.5
+updateproportion=0.5
+scanproportion=0
+requestdistribution=zipfian
+
+</code></pre>
+
+<p>ycsb压测命令如下：</p>
+
+<pre><code>./bin/ycsb run mongodb -s -P workloads/2000w-rw -threads 40 
+</code></pre>
+
+<p>同时，我们还构造了一个测试case，用于观察crash掉的节点挂掉一段时间重新加入集群后，对于集群性能的影响：</p>
+
+<pre><code>ycsb发压 
+{
+    kill掉一个Secondary节点
+    等待一段时间
+    挂掉的Secondary节点重新加入集群
+}
+</code></pre>
+
+<p>对于原生的Raft协议来说，慢节点的重新加入是不会对整个集群的性能产生影响的，但是测试的结果却让人大跌眼镜。可以看到，几乎在慢节点重新加入集群的瞬间，集群的读写均掉底，而在从节点追上进度以后，QPS又恢复了。<br />
+<img src="/mongo-parallel-batch-lock/9DD59BDE-64CC-42CB-9AD7-4B1D401B62A9.png" alt="3cf51583dda063b66d41ba4be078e81f.png" /><img src="/mongo-parallel-batch-lock/67525026-58DA-4688-9347-F88EA4A3AC7A.png" alt="1087fa9af1f7ba9df4d6172f3ef64b2a.png" /></p>
+
+<h2 id="排查">排查</h2>
+
+<p>我们首先观察到各个节点除了重新加入集群节点的CPU和IO飙高之外，其余节点的CPU和IO和QPS一样同时掉底了。单看这一点是合理的，因为重新加入集群的节点需要同步数据。从下面这张图是mongo自身监控工具输出的结果，可以看到重新加入集群的节点同步数据速度非常快，每秒写入速度在6万条记录左右。
+<img src="/mongo-parallel-batch-lock/539947EA-4F70-4746-A1B5-81DAEDC37755.png" alt="bc95bbe527fbb619fb6b6c9a51e77bb4.png" /><br />
+观察整个集群的拓扑，mongos是整个集群流量的入口，负责负载均衡以及路由。我们怀疑是不是因为某种原因流量被mongos&quot;阻塞&quot;了？mongos的cpu使用率几乎为0，那是什么原因导致了mongos的cpu如此空闲呢？为此，我们绘制了off-cpu火焰图。普通的火焰图用于捕捉cpu的热点，与此相反，off-cpu火焰图用来分析为什么线程会让出cpu（例如：IO等待、锁等待等）。off-cpu火焰图的绘制主要参考了bredan的一篇博客，但是由于C++11匿名函数的引入，用博客的方法绘图无法得到mongos准确的调用栈，我对此进行了修复，参见:<a href="https://github.com/Drewryz/FlameGraph/tree/offcpu-flame-dev。下面是绘制off-cpu火焰图的过程：">https://github.com/Drewryz/FlameGraph/tree/offcpu-flame-dev。下面是绘制off-cpu火焰图的过程：</a></p>
+
+<pre><code>$ sudo perf record -e sched:sched_stat_sleep -e sched:sched_switch -e sched:sched_stat_blocked -e sched:sched_stat_iowait -e sched:sched_stat_wait -e sched:sched_process_exit -g -a -o perf.data.raw sleep 5
+
+$ sudo perf inject -v -s -i perf.data.raw -o perf.data
+
+$ sudo perf script -F comm,pid,tid,cpu,time,period,event,ip,sym,dso,trace --pid ${pid} -i perf.data | ./extract_trace.py | ./stackcollapse.pl | ./flamegraph.pl --countname=ms --title=&quot;Off-CPU Time Flame Graph&quot; --colors=io &gt; off_cpu.svg
+</code></pre>
+
+<p>off-cpu火焰图的每列代表一个调用栈，函数调用的顺序自底向上，越宽的列表示线程脱离cpu的时间越长。从图中可以看到，在采样的5S钟内，几乎所有的用户线程被阻塞了4.5S左右。而每个用户线程的函数调用栈都在等待一个条件变量。
+<img src="/mongo-parallel-batch-lock/5F36FEBB-D86F-4DE7-9E8A-1A74056AE45D.png" alt="06c8eddb5e457e7e33f1b6ae74337261.png" /><img src="/mongo-parallel-batch-lock/DDCD9CFC-787A-4406-AA2B-A6140E63825C.png" alt="03b131ce0d68fb6f51cb4cda41f8b88c.png" /><br />
+通过函数调用栈，分析了mongos与后端mongod交互的源码。mongos接收到一条用户的query后，会结合分片策略和路由算法计算每个query的destination。然后在线程池中将query并行分发到后端多个mongod节点上，并等待mongod的响应，当mongos接收到mongod的响应后，会将响应push到_responseQueue中。而用户的conn线程会在_responseQueue非空前，一直阻塞在队列的消费端。结合off-cpu火焰图，也就说conn线程一直在等待后端mongod的回包而被阻塞。另一方面，从火焰图上看到mongos的网络线程都阻塞在epoll系统调用上。
+<img src="/mongo-parallel-batch-lock/BCCDB1CF-5606-4E8B-A01F-3C0B604E12BE.png" alt="eb26f40cf5962e4a0747089b1523f19a.png" /><br />
+由于mongos一直在等待后端mongod的网络IO，因此cpu的使用率近乎为0，看来QPS掉底的原因与mongos无关。按照我们之前的经验，当一个Secondary节点挂掉并重新加入集群后是不会造成QPS掉底的现象的。那么整个系统拓扑的除了流量注入和线上业务有差别外，其余都相同。于是，我们把怀疑的对象放在了YCSB上。我们首先怀疑是不同版本的mongo driver引起的原因，但是测试了不同版本的driver后并未发现有什么不同。于是YCSB的压测逻辑是首要的怀疑对象，通过阅读YCSB的源码发现其每个压测线程的压测逻辑的伪代码如下：</p>
+
+<pre><code>clientThread() {
+    while (operationCount &gt; 0) {
+        nextOp = getNextOp()
+        switch(nextOp) {
+        case read:
+            getConnection().readMongo()
+        case write:
+            getConnection().writeMongo()
+        }
+        operationCount--
+    }
+}
+</code></pre>
+
+<p>可以看到，YCSB每个压测线程的逻辑整体上是一个循环，每个循环都是读写，读写，读写...交替。这种压测逻辑带来的问题是，任何一个操作被阻塞，其他的操作都不能进行。由于我们在压测时配了读写分离，读操作会被路由到Secondary节点上，考虑到从新加入到集群的新节点在大量拉取Master的数据，该节点的压力一定十分大，如果读操作路由到这个节点，读耗时增加，从而引起整个压测线程的压测流量雪崩。于是，我们检查了重新加入集群的节点在拉取数据时的慢查：
+<img src="/mongo-parallel-batch-lock/ECCC4811-A613-46BE-B9CF-6FE1E8245EAC.png" alt="01b17bc189f9861520869e0322e682e7.png" /><br />
+可以看到最简单的主键查询的耗时也在100ms以上。到这里我们已经清楚为什么在挂掉的节点重新加入集群后，QPS会迅速掉底，而当节点的数据同步完成以后，QPS又迅速恢复的原因。但是更进一步，我们还有另一个问题：为什么在重新加入集群的节点上的查询耗时会如此高？难道只是因为单纯拉数据导致节点的负载升高，导致用户query线程饥饿，最后导致查询耗时飙高吗？如果是这样，MongoDB官方在实现这部分逻辑时，为什么不对拉数据的动作进行限流，毕竟在同步速度与用户query的响应时间相比，后者似乎更为重要。于是我们绘制了挂掉的节点重新加入集群时的on-cpu火焰图和off-cpu火焰图。
+<img src="/mongo-parallel-batch-lock/28A0489D-F850-4D10-8BDE-6F77D60E3BE4.png" alt="bfc9ebeba840b3862d79a1911ae9fc18.png" /><img src="/mongo-parallel-batch-lock/BCDA0BF5-8EB0-4586-AD09-FD917DCCDD18.png" alt="22d1faf5e4dbc85cb984bb8556022cfd.png" /><br />
+非常好。从on-cpu火焰图上可以看到，大部分的cpu计算资源都被同步线程占用了，用户线程只使用了非常少的cpu资源, off-cpu火焰图揭示的现象与之相反。那么用户线程因为什么原因才受到cpu的如此“冷遇”呢。我们来看看off-cpu火焰图中关于conn线程的调用栈。
+<img src="/mongo-parallel-batch-lock/A0C5969A-F019-4E82-BB04-E776C2839CB7.png" alt="cddb1c29ed394e4f5c14dfe5234361b2.png" /><br />
+从图中看到，用户线程因为等待ResourceLock而被操作系统调度出CPU。这里补充一个知识，MongoDB为了解决管理不同粒度元素锁的问题，和其他数据库类似也使用了意向锁模式。通用的意向锁锁协议是这样的：<br />
+1. 要在任何数据库元素上(库、表、行)加X锁(写锁)或者S锁(读锁)，我们必须从层次结构的根开始加锁。<br />
+2. 如果我们处于我们要封锁元素的位置，则不需要进一步查找。我们直接请求该元素的S或者X锁。<br />
+3. 如果封锁的元素在数据库元素的层次结构中更靠下，那么需要在当前节点加一个意向锁。即，如果要获得子元素的S锁，需要在其父节点上加IS锁，要获得子元素的X锁，要在其父节点上加IX锁。当前节点的锁被授予后，继续向子节点行进，直到到达我们最后需要加锁的元素结束。</p>
+
+<p>意向锁的锁相容矩阵如下:</p>
+
+<pre><code>/**
+ * Lock modes.
+ *
+ * Compatibility Matrix
+ *                                          Granted mode
+ *   ---------------.--------------------------------------------------------.
+ *   Requested Mode | MODE_NONE  MODE_IS   MODE_IX  MODE_S   MODE_X  |
+ *     MODE_IS      |      +        +         +        +        -    |
+ *     MODE_IX      |      +        +         +        -        -    |
+ *     MODE_S       |      +        +         -        +        -    |
+ *     MODE_X       |      +        -         -        -        -    |
+ */
+</code></pre>
+
+<p>比如对于下面这张图，如果我们想要读取行1的数据，那么对于采用了意向锁模式的DBMS加锁的序列应该是：</p>
+
+<blockquote>
+<p>MODE_IS(Global)-&gt;MODE_IS(库1)-&gt;MODE_IS(表1)-&gt;MODE_S(行1)</p>
+</blockquote>
+
+<p><img src="/mongo-parallel-batch-lock/意向锁.jpg" alt="ca57c15737672df85f3130b7debe2691.jpeg" /><br />
+因为做了读写分离，重新加入集群的Secondary节点只会有读流量，那么对于query线程，Mongo Server除了对要读的文档本身加MODE_S外，文档之上的元素(库，表等)应该都会加MODE_IS锁，跟读了下源码也确实如此:</p>
+
+<pre><code>Lock::GlobalLock::GlobalLock(OperationContext* opCtx,
+                             LockMode lockMode,
+                             unsigned timeoutMs,
+                             EnqueueOnly enqueueOnly)
+    : _opCtx(opCtx),
+      _result(LOCK_INVALID),
+      _pbwm(opCtx-&gt;lockState(), resourceIdParallelBatchWriterMode),
+      _isOutermostLock(!opCtx-&gt;lockState()-&gt;isLocked()) {
+    _enqueue(lockMode, timeoutMs);
+}
+
+void Lock::GlobalLock::_enqueue(LockMode lockMode, unsigned timeoutMs) {
+    if (_opCtx-&gt;lockState()-&gt;shouldConflictWithSecondaryBatchApplication()) {
+        _pbwm.lock(MODE_IS);
+    }
+
+    _result = _opCtx-&gt;lockState()-&gt;lockGlobalBegin(lockMode, Milliseconds(timeoutMs));
+}
+
+void Lock::ResourceLock::lock(LockMode mode) {
+    invariant(_result == LOCK_INVALID);
+    _result = _locker-&gt;lock(_rid, mode);
+    invariant(_result == LOCK_OK);
+}
+</code></pre>
+
+<p>上面的代码与off-cpu火焰图中的conn线程调用栈一致，GloalLock是一个RAII类，_pbwm是GlobalLock的ResourceLock类型的成员。读流量传入的参数中，lockMode为MODE_IS。conn线程由于请求ResourceLock的IS锁而被阻塞，根据锁相容矩阵，可以知道只有一个线程已经拥有了ResourceLock的X锁，这种情况才会发生。那是谁持有了ResourceLock的X锁呢？我们需要了解下ResourceLock实现机制。
+ResourceLock是对Locker的封装，根据传入的locker对象和RecourdeId完成初始化。根据经验可以猜测到Locker可能是一个锁原语对象，用于对rid表示的资源进行加锁或解锁。</p>
+
+<pre><code>/**
+     * General purpose RAII wrapper for a resource managed by the lock manager
+     *
+     * See LockMode for the supported modes. Unlike DBLock/Collection lock, this will not do
+     * any additional checks/upgrades or global locking. Use ResourceLock for locking
+     * resources other than RESOURCE_GLOBAL, RESOURCE_DATABASE and RESOURCE_COLLECTION.
+     */
+    class ResourceLock {
+    
+    public:
+        ResourceLock(Locker* locker, ResourceId rid)
+            : _rid(rid), _locker(locker), _result(LOCK_INVALID) {}
+
+        ResourceLock(Locker* locker, ResourceId rid, LockMode mode)
+            : _rid(rid), _locker(locker), _result(LOCK_INVALID) {
+            lock(mode);
+        }
+
+        ......
+
+        ~ResourceLock() {
+            if (isLocked()) {
+                unlock();
+            }
+        }
+
+        void lock(LockMode mode) {
+             invariant(_result == LOCK_INVALID);
+            _result = _locker-&gt;lock(_rid, mode);
+            invariant(_result == LOCK_OK);
+        }
+        
+        void unlock() {
+            if (_result == LOCK_OK) {
+                _locker-&gt;unlock(_rid);
+                _result = LOCK_INVALID;
+            }
+        }
+
+        ......
+        
+    private:
+        const ResourceId _rid;
+        Locker* const _locker;
+
+        LockResult _result;
+    };
+</code></pre>
+
+<p>参考上文GlobalLock初始化代码，conn线程是因为请求resourceIdParallelBatchWriterMode的IS锁而阻塞，搜索resourceIdParallelBatchWriterMode关键词，可以得到下面请求X锁的代码。</p>
+
+<pre><code>Lock::ParallelBatchWriterMode::ParallelBatchWriterMode(Locker* lockState)
+    : _pbwm(lockState, resourceIdParallelBatchWriterMode, MODE_X),
+      _lockState(lockState),
+      _orginalShouldConflict(_lockState-&gt;shouldConflictWithSecondaryBatchApplication()) {
+    _lockState-&gt;setShouldConflictWithSecondaryBatchApplication(false);
+}
+</code></pre>
+
+<p>原来ParallelBatchWriterMode对象持有了resourceIdParallelBatchWriterMode资源的X锁才是导致conn线程被阻塞的罪魁祸首，那么ParallelBatchWriterMode类是用来做什么的呢？我们在源码的复制模块中找到了如下所示的源码。根据代码注释可以知道，Mongo在进行复制的时候会通过对resourceIdParallelBatchWriterMode加X锁而将所有的数据读取线程阻塞。因为全局锁的存在，当Secondary节点的数据进度落后Master节点较多时，那么Secondary节点的回放线程势必会经常持有全局锁，从而导致Secondary节点响应用户读流量延迟增大。</p>
+
+<pre><code>    // Stop all readers until we're done. This also prevents doc-locking engines from deleting old
+    // entries from the oplog until we finish writing.
+    Lock::ParallelBatchWriterMode pbwm(opCtx-&gt;lockState());
+</code></pre>
+
+<p>那Mongo这么设计的考量是什么呢？经过查资料和走读源码，发现主要的原因有两个：<br />
+1. Secondary节点每次会从Master节点拉取一批oplog，为了缩短复制时间，Secondary节点在回放一批oplog时，会将这批oplog分配到一个线程池进行并行复制。如果回放oplog时不加锁，那么用户在读Secondary时，可能会读到不一致的数据。<br />
+2. 在oplog回放时，如果不加全局锁，当Secondar节点读流量较大时，oplog回放进程与用户读进程会发生锁争抢。那么oplog回放的进度一定会受到较大影响，严重的情况可能会导致Secondary节点的数据进度与Master节点越拉越大。</p>
+
+<p>第2点比较好理解，我们主要考虑第1点。假设数据库初始状态只有两个数据：</p>
+
+<blockquote>
+<p>A = 1, B = 2</p>
+</blockquote>
+
+<p>假设Maste节点顺序发生了如下两个动作,最后的状态为S2:A=2,B=3。<br />
+<img src="/mongo-parallel-batch-lock/mongo主从不一致示意图-第 1 页.jpg" alt="3daf77c9abfd81b239c4a5e287425edf.jpeg" /><br />
+如果Secondary节点在主节点的状态转换到状态S2时，开始拉取oplog并回放，假设回放的顺序如下所示：<br />
+<img src="/mongo-parallel-batch-lock/mongo主从不一致示意图-第 2 页.jpg" alt="f99279caf922cba3a997bb469ccbd5ac.jpeg" /><br />
+可以看到Secondary节点出现了A=1，B=3的状态，这个状态在Master上是不存在的，如果用户线程读取到了Secondary节点状态2的数据，那就失去了主从数据一致性。</p>
+
+<h2 id="解决">解决</h2>
+
+<p>对于上文分析的问题，Mongo官方从4.0版本开始得到解决。核心做法是在引擎层引入了一个新特性：</p>
+
+<blockquote>
+<p>将引擎层的事务ID与server层的时间戳对应起来</p>
+</blockquote>
+
+<p>当Secondary回放一批oplog结束后，会根据这批oplog的最后一条oplog的时间戳，并在引擎层做一个snapshot。之后当有业务读流量进来时，query线程不会再去请求ResourceLock的IS锁，而是直接进行快照读，这就避免了query线程阻塞。我们将集群拓扑升级到了4.0，下面是我们测试的结果。All is wll ：）
+<img src="/mongo-parallel-batch-lock/D14F33BF-F300-4C36-9231-131CB791E1FB.png" alt="1c42fbea6164f2aeba2b9ce7361cc1bb.png" /></p>
+
+<h2 id="总结">总结</h2>
+
+<p>我们在排查问题时远没有文中描述的那么顺利，经常陷入细节中导致排查问题困难。下面是我总结的一些经验：</p>
+
+<ul>
+<li>性能问题一开始就是复杂的，系统中的每一个实体都可能是要被怀疑的对象。<br /></li>
+<li>不去看具体表现就匆忙动手测试，这是非常不明智的，因为每一次动手都是一次资源支出（时间和精力），而且每一次动手都非常有可能带来新来的问题。<br /></li>
+<li>在解决问题的整个过程中，始终要思考和回溯真正的问题是什么，不然会非常容易掉入坑里。<br /></li>
+<li>排查问题过程中，每一次测试最好都要有文档记录，时间拉得越长，文档记录就越重要。<br /></li>
+<li>优先使用业务层提供的工具排查问题，而不是操作系统提供的工具。<br /></li>
+</ul>
+</div>
+        <div class="post_footer">
+          
+          <div class="meta">
+            <div class="info">
+              <span class="field tags">
+                <i class="remixicon-stack-line"></i>
+                
+                <a href="https://www.meditations.ink/tags/%E6%95%B0%E6%8D%AE%E5%BA%93/">数据库</a>
+                
+                <a href="https://www.meditations.ink/tags/%E6%8D%89%E8%99%AB/">捉虫</a>
+                
+                <a href="https://www.meditations.ink/tags/mongo/">mongo</a>
+                
+                <a href="https://www.meditations.ink/tags/%E6%80%A7%E8%83%BD%E8%B0%83%E4%BC%98/">性能调优</a>
+                
+              </span>
+            </div>
+          </div>
+          
+        </div>
+      </div>
+      
+      
+    </div>
+  </div>
+  <a id="back_to_top" href="#" class="back_to_top"><span>△</span></a>
+</div>
+<footer class="footer">
+  <div class="powered_by">
+    <a href="https://zeuk.me">Designed by Zeuk,</a>
+    <a href="http://www.gohugo.io/">Proudly published with Hugo</a>
+  </div>
+
+  <div class="footer_slogan">
+    <span>事实唯真，目的本位</span>
+  </div>
+</footer>
+
+
+
+<script src="https://www.meditations.ink/js/jquery-3.3.1.min.js"></script>
+<script src="https://www.meditations.ink/js/zozo.js"></script>
+<script src="https://www.meditations.ink/js/highlight.pack.js"></script>
+<link  href="https://www.meditations.ink/css/fancybox.min.css" rel="stylesheet">
+<script src="https://www.meditations.ink/js/fancybox.min.js"></script>
+
+<script>hljs.initHighlightingOnLoad()</script>
+
+
+  <script type="text/javascript" async src="https://cdn.bootcss.com/mathjax/2.7.5/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['$','$'], ['\\(','\\)']],
+    displayMath: [['$$','$$'], ['\[\[','\]\]']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+});
+
+MathJax.Hub.Queue(function() {
+    
+    
+    
+    var all = MathJax.Hub.getAllJax(), i;
+    for(i = 0; i < all.length; i += 1) {
+        all[i].SourceElement().parentNode.className += ' has-jax';
+    }
+});
+</script>
+
+<style>
+code.has-jax {
+    font: inherit;
+    font-size: 100%;
+    background: inherit;
+    border: inherit;
+    color: #515151;
+}
+</style>
+
+
+
+
+
+
+</body>
+</html>

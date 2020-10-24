@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>性能调优 on 沉思录</title>
+    <link>https://www.meditations.ink/tags/%E6%80%A7%E8%83%BD%E8%B0%83%E4%BC%98/</link>
+    <description>Recent content in 性能调优 on 沉思录</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Thu, 23 Jul 2020 17:47:57 +0800</lastBuildDate>
+    
+	<atom:link href="https://www.meditations.ink/tags/%E6%80%A7%E8%83%BD%E8%B0%83%E4%BC%98/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>MongoDB跨机房自动failover：并行复制全局锁造成的QPS掉底原因分析与解决</title>
+      <link>https://www.meditations.ink/posts/mongo-parallel-batch-lock/</link>
+      <pubDate>Thu, 23 Jul 2020 17:47:57 +0800</pubDate>
+      
+      <guid>https://www.meditations.ink/posts/mongo-parallel-batch-lock/</guid>
+      <description>背景 MongoDB是一个分布式数据库，底层数据通过Raft协议复制，原生支持数据强一致性以及分布式事务，支持副本集自动failover。一个典型的MongoDB集群拓扑如下图所示： mongos是代理层</description>
+    </item>
+    
+  </channel>
+</rss>

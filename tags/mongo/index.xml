@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>mongo on 沉思录</title>
+    <link>https://www.meditations.ink/tags/mongo/</link>
+    <description>Recent content in mongo on 沉思录</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Thu, 23 Jul 2020 17:47:57 +0800</lastBuildDate>
+    
+	<atom:link href="https://www.meditations.ink/tags/mongo/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>MongoDB跨机房自动failover：并行复制全局锁造成的QPS掉底原因分析与解决</title>
+      <link>https://www.meditations.ink/posts/mongo-parallel-batch-lock/</link>
+      <pubDate>Thu, 23 Jul 2020 17:47:57 +0800</pubDate>
+      
+      <guid>https://www.meditations.ink/posts/mongo-parallel-batch-lock/</guid>
+      <description>背景 MongoDB是一个分布式数据库，底层数据通过Raft协议复制，原生支持数据强一致性以及分布式事务，支持副本集自动failover。一个典型的MongoDB集群拓扑如下图所示： mongos是代理层</description>
+    </item>
+    
+    <item>
+      <title>VIP引起的Mongos Cursor Not Found问题定位与解决方案</title>
+      <link>https://www.meditations.ink/posts/mongos-cursor-not-found/</link>
+      <pubDate>Sun, 17 May 2020 22:47:57 +0800</pubDate>
+      
+      <guid>https://www.meditations.ink/posts/mongos-cursor-not-found/</guid>
+      <description>现象 业务方反应查询数据时，mongo有时候会报Cursor not found的错误，该错误不只java dirver有出现，对于使用golang的业务，也有反馈: 集群架构如下图所示。LVS采用round-ro</description>
+    </item>
+    
+    <item>
+      <title>MongoDB源码编译</title>
+      <link>https://www.meditations.ink/posts/mongo-compile/</link>
+      <pubDate>Fri, 08 Nov 2019 20:11:04 +0800</pubDate>
+      
+      <guid>https://www.meditations.ink/posts/mongo-compile/</guid>
+      <description>主要参考资料: https://github.com/mongodb/mongo/wiki/Build-Mongodb-From-Source 编译环境：Centos\Ubuntu 依赖 编译master分支，gcc版本需要在8.0以上，编译3.6，gcc版本需要在5.4.0以上 升级的gcc的路径不要装错，否则会出现一些错误，fi</description>
+    </item>
+    
+  </channel>
+</rss>

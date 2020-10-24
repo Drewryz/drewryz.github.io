@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="zh-cn" >
+<head>
+  <meta charset="utf-8"/>
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+
+  
+  <meta name="author"
+        content="YZR"/>
+
+  
+  <meta name="description" content="Raft是一种分布式一致性算法，关于该算法的论文很多，本文参阅的论文为In Search of an Understandable Consensus Algorithm (Extended Version)，该论文对于Raft Basic有很好的讲解，可以作为Raft算法的入门资料，本文还同时参考了MI"/>
+  
+
+  
+  
+  <meta name="keywords" content="Hugo, theme, zozo"/>
+  
+
+  
+  <link rel="canonical" href="https://www.meditations.ink/posts/raft-basic/"/>
+
+  
+
+  <title>Raft论文阅读：Raft Basic &middot; 沉思录</title>
+
+  <link rel="shortcut icon" href="https://www.meditations.ink/images/favicon.ico"/>
+  <link rel="stylesheet" href="https://www.meditations.ink/css/animate.min.css"/>
+  <link rel="stylesheet" href="https://www.meditations.ink/css/remixicon.css"/>
+  <link rel="stylesheet" href="https://www.meditations.ink/css/zozo.css"/>
+  <link rel="stylesheet" href="https://www.meditations.ink/css/highlight.css"/>
+
+  
+  
+</head>
+
+<body>
+<div class="main animated">
+  <div class="nav_container animated fadeInDown">
+  <div class="site_nav" id="site_nav">
+    <ul>
+      
+      <li>
+        <a href="/">首页</a>
+      </li>
+      
+      <li>
+        <a href="/posts/">归档</a>
+      </li>
+      
+      <li>
+        <a href="/tags/">标签</a>
+      </li>
+      
+      <li>
+        <a href="/about/">关于</a>
+      </li>
+      
+    </ul>
+  </div>
+  <div class="menu_icon">
+    <a id="menu_icon"><i class="remixicon-links-line"></i></a>
+  </div>
+</div>
+
+  <div class="header animated fadeInDown">
+  <div class="site_title_container">
+    <div class="site_title">
+      <h1>
+        <a href="https://www.meditations.ink">
+          <span>沉思录</span>
+          <img src="https://www.meditations.ink/images/logo.svg"/>
+        </a>
+      </h1>
+    </div>
+    <div class="description">
+      <p class="sub_title">Follow me</p>
+      <div class="my_socials">
+        
+        
+        <a href="https://github.com/Drewryz" title="github" target="_blank"><i class="remixicon-github-fill"></i></a>
+        
+        
+        <a href="https://www.meditations.ink/index.xml" type="application/rss+xml" title="rss" target="_blank"><i class="remixicon-rss-fill"></i></a>
+      </div>
+    </div>
+  </div>
+</div>
+
+  <div class="content">
+    <div class="post_page">
+      <div class="post animated fadeInDown">
+        <div class="post_title post_detail_title">
+          <h2><a href='/posts/raft-basic/'>Raft论文阅读：Raft Basic</a></h2>
+          <span class="date">2019.10.21</span>
+        </div>
+        <div class="post_content markdown">
+
+<p>Raft是一种分布式一致性算法，关于该算法的论文很多，本文参阅的论文为<a href="https://pdos.csail.mit.edu/6.824/papers/raft-extended.pdf">In Search of an Understandable Consensus Algorithm (Extended Version)</a>，该论文对于Raft Basic有很好的讲解，可以作为Raft算法的入门资料，本文还同时参考了<a href="https://pdos.csail.mit.edu/6.824/index.html">MIT6.824分布式系统课程</a>。</p>
+
+<h2 id="前言">前言</h2>
+
+<p>种类繁多的一致性算法其实是为了解决分布式系统存在的一致性问题而诞生的，那什么是分布式系统呢?</p>
+
+<ul>
+<li>多台计算机共同协作</li>
+<li>大型网站的存储，MapReduce，点对点共享，等等</li>
+<li>许多关键的基础设施是分布式的</li>
+</ul>
+
+<p>为什么需要分布式？</p>
+
+<ul>
+<li>为了组织物理上独立的实体</li>
+<li>通过隔离实现安全</li>
+<li>通过复制来容错</li>
+<li>通过并行(cpu /mem/disk/net), 扩展系统吞吐量</li>
+</ul>
+
+<p>但是存在一些问题</p>
+
+<ul>
+<li>复杂：许多并发部分</li>
+<li>必须处理部分节点失败</li>
+<li>难以实现性能潜力</li>
+</ul>
+
+<p>所以，一致性问题又是什么？</p>
+
+<ul>
+<li>通用基础设施需要定义良好的行为，实现良好的行为是困难的</li>
+<li>复制服务器很难保持同步</li>
+<li>客户端可能在多步更新过程中崩溃</li>
+<li>服务器在“尴尬”的时刻崩溃，例如命令已经执行，但是在向客户端回复之前崩溃掉</li>
+<li>脑裂</li>
+<li>一致性和性能难以兼顾</li>
+<li>强一致性常常导致系统变慢</li>
+<li>高性能常常给应用程序带来弱一致性</li>
+</ul>
+
+<p>为了解决分布式系统中的一致性问题，人们做出了很多努力，Raft算法便是成果之一。</p>
+
+<h2 id="raft介绍">Raft介绍</h2>
+
+<p>除了解决一致性问题之外，Raft诞生的另一个主要原因是Paxos算法非常难以理解，所以Raft的一大特点是简单、易于理解，除此之外，它还有以下特性（细节会在后文详细介绍，所以不理解也没关系）：</p>
+
+<ul>
+<li>强leader：不同于其他算法，Raft采用了强leader的模式，系统中各个节点的日志流向只能从leader流入其余节点，如此设计的原因是为了简化日志复制时的管理复杂度。</li>
+<li>leader选举：在选主这一块，Raft采用了随机定时器机制，该机制简洁且迅速。</li>
+<li>成员变更：Raft采用了连接一致性算法，把分布式系统从就成员组过度到新成员组，在成员变更时，集群还可以对外响应请求。</li>
+</ul>
+
+<h2 id="复制状态机">复制状态机</h2>
+
+<p>复制状态机用于每个节点复制日志使用，如图。每一个节点保存着一份日志，日志中包含一系列的命令，状态机会按顺序执行这些命令。因为每一台计算机的状态机都是确定的，所以每个状态机的状态都是相同的，执行的命令是相同的，最后的执行结果也就是一样的了。</p>
+
+<p><img src="/raft-basic/image-20191123202049020.png" alt="image-20191123202049020" /></p>
+
+<p>如何保证复制日志一致就是一致性算法的工作了。在一个节点上，一致性模块接受客户端的命令并且把命令加入到它的日志中。它和其他节点上的一致性模块进行通信来确保每一个日志最终包含相同序列的请求，即使有一些节点宕机了。一旦这些命令被正确的复制了，每一个节点的状态机都会按同样的顺序去执行它们，然后将结果返回给客户端。最终，这些节点看起来就像一台可靠的状态机。</p>
+
+<p>工程中使用的一致性算法应该有以下几个性质：</p>
+
+<ul>
+<li>要确保安全性。算法要确保系统出现网络延迟、网络分区、丢包、日志重复、日志重排等问题，仍能正确运行。</li>
+<li>要确保可用性。只要大多数节点还在存活，系统应该仍能响应客户端请求。</li>
+<li>不能依靠时钟。因为如果出现了时钟错误，以及极端的消息延迟，会对系统的可用性造成影响。</li>
+<li>一般来说，只要大多数节点成功执行了指令，那整个系统就可以对client返回成功，因此慢节点不会影响系统的性能。</li>
+</ul>
+
+<h2 id="raft-basic">Raft Basic</h2>
+
+<p>Raft 通过选出一个leader来实现一致性，然后给予leader管理复制日志（replicated log）的责任。leader接收来自客户端的日志条目，并把它们复制到其他节点上，leader还要告诉节点什么时候将日志条目应用到它们的状态机是安全的。通过选出leader能够简化复制日志的管理工作。例如，leader能够决定将新的日志条目放到哪，而并不需要和其他的节点商议，数据流被简化成从leader流向其他节点。如果leader宕机或者和其他节点失去连接，就可以选取下一个leader。</p>
+
+<p>通过选出leader，Raft 将一致性问题分解成为三个相对独立的子问题：</p>
+
+<ul>
+<li>leader选举：在一个leader宕机之后必须要选取一个新的leader。</li>
+<li>日志复制：leader必须从客户端接收日志然后复制到集群中的其他节点，并且强制要求其他节点的日志保持和自己相同。</li>
+<li>安全性：Raft 的关键的安全特性是状态机安全性，如果一个节点已经将给定索引位置的日志条目应用到状态机中，则所有其他节点不会在该索引位置应用不同的条目。</li>
+</ul>
+
+<p>一个典型的Raft集群，会有5个节点，其可以容忍两个节点出现问题。Raft集群中每个节点总共有三个角色：leader，follower，candidate。集群正常运行时，只有一个leader，其余的都为follower。其中，follower是被动的，它不主动发送请求，而是回应leader或者candidate的请求。leader处理client的所有请求，如果client把请求发送给follower，follower会转发给leader，其节点状态转化如下：</p>
+
+<p><img src="/raft-basic/image-20190906103953281.png" alt="image-20190906103953281" /></p>
+
+<ul>
+<li>当节点间彼此进行通信的时候，节点间的当前时段会被交换</li>
+<li>当普通节点的时段比其他节点小时，它会更新自己的时段</li>
+<li>当candidate或者leader发现自己的时段比其他节点小时，会转换为follower状态</li>
+</ul>
+
+<p>时间被分为任意时长的时段。每个时段由连续的数字标识，每个时段起始于一次选举。选举成功后，leader在当前时段管理所有节点。存在某些时段，选举失败，那么这个时段会立刻结束，等待下一次选举。Raft保证一个时段最多只有一个leader。</p>
+
+<p><img src="/raft-basic/2019-09-07-2.13.25.png" alt="屏幕快照 2019-09-07 下午2.13.25" /></p>
+
+<p>不同节点观察到时段转换的时间是不同的，每当节点之间通信时，当前的时段信息也会交换。时段较小的节点会更新其时段。leader或者候选者发现自己的时段是过时的时候，会将状态转换为follower。</p>
+
+<h3 id="leader选举">leader选举</h3>
+
+<p>Raft 使用心跳（heartbeat）来触发leader选举。当节点启动时，会初始化为follower。节点会一直保持follower的状态，只要它们能够收到来自leader或者candidate的有效 RPC。leader会向所有follower周期性发送心跳来保证leader的地位。如果一个follower在一个周期内没有收到心跳信息，叫做选举超时，然后它会假定没有可用的leader，并且开始发起选举来选出一个新leader。</p>
+
+<p>为了开始选举，一个follower会自增它的当前时段，并且转换为follower。然后，它会给自己投票并且给集群中的其他节点发送 RequestVote RPC。一个candidate会一直处于该状态，直到下列三种情形之一发生：</p>
+
+<ul>
+<li>赢得选举；</li>
+<li>另一个节点赢得选举；</li>
+<li>一段时间后没有任何一台节点赢得选举</li>
+</ul>
+
+<p>一个candidate如果在一个任期内收到了来自集群中大多数节点的投票就会赢得选举。在一个任期内，一个节点最多能给一个candidate投票，并且要按照先到先服务的原则。该机制使得在一个任期内最多有一个候选人能赢得选举。一旦有一个候选人赢得了选举，它就会成为领导人。然后它会像其他服务器发送心跳信息来建立自己的领导地位并且组织新的选举。</p>
+
+<p>当一个candidate等待别人的选票时，它有可能会收到来自其他服务器发来的声明其为leader的 AppendEntries RPC。如果这个leader的时段（包含在它的 RPC 中）比当前candidate的时段要大，则candidate认为该leader合法，并且转换自己的状态为follower，反之，则candidate会拒绝此次 RPC， 继续保持候candidate状态。</p>
+
+<p>第三种情形是一个candidate既没有赢得选举也没有输掉选举：如果许多follower在同一时刻都成为了候选人，选票会被分散，可能没有candidate能获得大多数的选票。当这种情形发生时，每一个candidate都会超时，并且通过自增时段号和发起另一轮 RequestVote RPC 来开始新的选举。</p>
+
+<p>Raft使用随机的选举超时时间来确保第三种情形很少发生，并且能够快速解决。为了防止在一开始是选票就被瓜分，选举超时时间是在一个固定的间隔内随机选出来的（例如，150~300ms）。这种机制使得在大多数情况下只有一个节点会率先超时，它会在其它节点超时之前赢得选举并且向其它服务器发送心跳信息。同样的机制被用于选票一开始被瓜分的情况下。每一个候选人在开始一次选举的时候会重置一个随机的选举超时时间，在超时进行下一次选举之前一直等待。这能够减小在新的选举中一开始选票就被瓜分的可能性。</p>
+
+<h3 id="日志复制">日志复制</h3>
+
+<p>总的来说，客户端向leader发送请求，leader将请求写入日志，然后leader并行向follower发送请求复制该条目。当该条目被复制之后，leader会在自己的状态机执行该条目，leader执行完该条目以后会反馈给客户端。</p>
+
+<p>Raft日志的组织形式如下图所示。 每个日志条目存储着一条被状态机执行的命令和当这条日志条目被leader接收时的时段号。日志条目中的时段号用来检测在不同服务器上日志的不一致性。每个日志条目也包含一个整数索引来表示它在日志中的位置。</p>
+
+<p><img src="/raft-basic/image-20191123213819775.png" alt="image-20191123213819775" /></p>
+
+<p>leader决定什么时候将日志条目应用到状态机是安全的；这种条目被称为可被提交的（commited）。Raft 保证可被提交的日志条目是持久化的并且最终会被所有可用的状态机执行。一旦被leader创建的条目已经复制到了大多数的节点上，这个条目就称为可被提交的，如上图中的7条目。leader跟踪记录它所知道的被提交条目的最大索引值，并且这个索引值会包含在之后的 AppendEntries RPC 中（包括心跳 heartbeat 中），为的是让其他节点都知道这条条目已经提交。一旦一个follower知道了一个日志条目已经被提交，它会将该条目应用至本地的状态机（按照日志顺序）。</p>
+
+<p>Raft日志机制保证不同服务器上日志的一致性。这样做不仅简化了系统的行为使得它更可预测，并且也是保证安全性不可或缺的一部分。Raft 保证以下特性：</p>
+
+<ul>
+<li>如果在不同日志中的两个条目有着相同的索引和时段号，则它们所存储的命令是相同的。</li>
+<li>如果在不同日志中的两个条目有着相同的索引和时段号，则它们之间的所有条目都是完全一样的。</li>
+</ul>
+
+<p>第一条特性源于leader在一个任期里在给定的一个日志索引位置最多创建一条日志条目，同时该条目在日志中的位置也从来不会改变。第二条特性源于 AppendEntries 的一个简单的一致性检查。当发送一个 AppendEntries RPC 时，leader会把新日志条目紧接着之前的条目的索引位置和时段号都包含在里面。如果follower没有在它的日志中找到相同索引和时段号的日志，它就会拒绝新的日志条目。这个一致性检查就像数学中的归纳法：一开始空的日志的状态一定是满足日志匹配原则的，一致性检查保证了当日志添加时的日志匹配原则。因此，只要AppendEntries 返回成功的时候，领导人就知道追随者们的日志和它的是一致的了。</p>
+
+<p>一般情况下，leader和follower的日志保持一致，因此 AppendEntries 一致性检查通常不会失败。然而，由于leader崩溃会导致日志不一致（旧leader可能没有完全复制完日志中的所有条目）。这些不一致会导致一系列leader和follower崩溃。下图阐述了一些follower可能和新的leader日志不同的情况。一个follower可能会丢失掉leader上的一些条目，也有可能包含一些leader没有的条目，也有可能两者都会发生。丢失的或者多出来的条目可能会持续多个任期。</p>
+
+<p><img src="/raft-basic/image-20191123220108669.png" alt="image-20191123220108669" /></p>
+
+<p>上图中，当最上边的leader掌权之后，follower日志可能有以下情况（a~f）。一个格子表示一个日志条目；格子中的数字是它的任期。一些follower可能会丢失一些条目（a, b）；可能多出来一些未提交的条目（c, d）；或者两种情况都有（e, f）。例如，场景 f 在如下情况下就会发生：如果一个节点在时段2时是leader并且往它的日志中添加了一些条目，然后在将它们提交之前就宕机了，之后它很快重启了，成为了时段3的leader，又往它的日志中添加了一些条目，然后在时段2和时段3中的条目提交之前它又宕机了并且几个任期内都一直处于宕机状态。</p>
+
+<p>在 Raft 算法中，leader通过强制follower复制它的日志来处理日志的不一致。这就意味着，在follower上的冲突日志会被leader的日志覆盖。</p>
+
+<p>为了使得follower的日志同自己的一致，leader需要找到follower同它的日志一致的地方，然后删除follower在该位置之后的条目，然后将自己在该位置之后的条目发送给follower。这些操作都在 AppendEntries RPC 进行一致性检查时完成。leader给每一个follower维护了一个<code>nextIndex</code>，它表示leader将要发送给该follower的下一条日志条目的索引。当一个leader开始掌权时，它会将<code>nextIndex</code>初始化为它的最新的日志条目索引数 +1（上图中的 11）。如果一个follower的日志和leader的不一致，AppendEntries 一致性检查会在下一次 AppendEntries RPC 时返回失败。在失败之后，leader会将<code>nextIndex</code>递减然后重试 AppendEntries RPC。最终<code>nextIndex</code>会达到一个leader和follower日志一致的地方。这时，AppendEntries 会返回成功，follower冲突的日志条目都被移除了，并且添加所缺少的上了leader的日志条目。一旦 AppendEntries 返回成功，follower和leader的日志就一致了，这样的状态会保持到该任期结束。</p>
+
+<h3 id="安全性">安全性</h3>
+
+<p>前文中讨论了 Raft 算法是如何进行leader选取和复制日志的。然而，到目前为止这个机制还不能保证每一个状态机能按照相同的顺序执行同样的指令。例如，当leader提交了若干日志条目的同时一个follower可能宕机了，之后它又被选为了leader然后用新的日志条目覆盖掉了旧的那些，最后，不同的状态机可能执行不同的命令序列。</p>
+
+<p>这一节通过在leader选取部分加入限制来完善 Raft 算法。这个限制能够保证对于固定的时段，任何leader都拥有之前leader提交的全部日志条目。有了这一限制，日志提交的规则就更清晰了。</p>
+
+<h4 id="选举约束">选举约束</h4>
+
+<p>相较于其他一致性算法，Raft 使用了一种更简单的方式来保证在新的leader开始选举的时候，在之前时段的所有已提交的日志条目都会出现在新leader的日志中，而不需要将这些日志条目传送给leader。这就意味着日志条目只有一个流向：从leader流向follower。leader永远不会覆盖已经存在的日志条目。</p>
+
+<p>Raft 使用投票的方式来阻止没有包含全部日志条目的节点得选举。一个follower为了赢得选举必须要和集群中的大多数节点进行通信，这就意味着每一条已经提交的日志条目最少在其中一个节点上出现。如果follower的日志至少和大多数节点上的日志一样新（up-to-date，这个概念会在下边有详细介绍），那么它一定包含有全部的已经提交的日志条目。RequestVote RPC 实现了这个限制：这个 RPC（远程过程调用）包括候选人的日志信息，如果它自己的日志比follower的日志要新，那么它会拒绝follower的投票请求。</p>
+
+<p>Raft 通过比较日志中最后一个条目的索引和时段号来决定两个日志哪一个更新。如果两个日志的时段号不同，时段号大的更新；如果时段号相同，更长的日志更新。</p>
+
+<h4 id="提交旧leader日志">提交旧leader日志</h4>
+
+<p>如上文描述的，只要一个日志条目被存在了在多数的节点上，leader就知道当前时段可以提交该条目了。如果leader在提交之前就崩溃了，之后的leader会试着继续完成对日志的复制。然而，leader并不能断定存储在大多数节点上的日志条目一定在之前的时段中被提交了。下图说明了一种情况，一条存储在了大多数节点上的日志条目仍然被新leader覆盖了。</p>
+
+<p><img src="/raft-basic/d73cf61ce742ac0cb736cfad24665a84.jpg" alt="d73cf61ce742ac0cb736cfad24665a84" /></p>
+
+<p>上图的时间序列说明了为什么leader不能通过之前时段的日志条目判断它的提交状态。（a）中的 S1是leader并且部分复制了索引 2 上的日志条目。（b）中 S1 崩溃了；S5 通过 S3，S4 和自己的选票赢得了选举，并且在索引 2 上接收了另一条日志条目。（c）中 S5 崩溃了，S1 重启了，通过 S2，S3 和自己的选票赢得了选举，并且继续索引 2 处的复制，这时时段 2 的日志条目已经在大部分服务器上完成了复制，但是还并没有提交。如果在（d）时刻 S1 崩溃了，S5 会通过 S2，S3，S4 的选票成为leader，然后用它自己在时段 3 的日志条目覆盖掉其他节点的日志条目。然而，如果在崩溃之前，S1 在它的当前任期在大多数节点上复制了一条日志条目，就像在（e）中那样，那么这条条目就会被提交（S5 就不会赢得选举）。在这时，之前的日志条目就会正常被提交。</p>
+
+<p>为了消除上图中描述的问题，Raft 不会通过计算复制的数目来提交之的日志条目。对于leader来说，只有它当前时段的日志条目才能通过计算数目来进行提交。一旦当前时段的日志条目以这种方式被提交，那么由于日志匹配原则（Log Matching Property），之前的日志条目也都会被间接的提交。</p>
+
+<h2 id="raft-extended">Raft Extended</h2>
+
+<h3 id="集群成员变更">集群成员变更</h3>
+
+<p>希望不停机的前提下，增加或者删除节点</p>
+
+<p>如果所有的节点不是同时改变配置，那就有同一个时段存在两个leader的可能，如图，3节点集群变成5节点集群：</p>
+
+<p><img src="/raft-basic/image-20191028142648180.png" alt="image-20191028142648180" /></p>
+
+<p>为了保证安全性，配置变更必须使用两阶段算法</p>
+
+<p>论文中使用了joint consensus算法，该算法只是配置变更策略的一种
+<img src="/raft-basic/image-20191129150859535.png" alt="image-20191129150859535" /></p>
+
+<p>约束：</p>
+
+<ul>
+<li>日志条目被复制到所有的新旧节点上</li>
+<li>达成一致，需要新节点和旧节点都达成一致</li>
+</ul>
+
+<p>joint consensus用于连接old_c和new_c，并且防止old_c或者new_c的节点单独做决策</p>
+
+<h3 id="日志压缩">日志压缩</h3>
+
+<p>......</p>
+
+<h3 id="客户端交互">客户端交互</h3>
+
+<ul>
+<li>客户端所有的请求都发给leader</li>
+<li>raft实现线性化语义：在客户端调用以及raft回复的某个时间点上，每个动作被仅且立即执行一次</li>
+<li>即使raft没有响应客户端的请求，在某些情况下，该请求可能已经被raft执行了</li>
+<li>leader在回应读请求的时候，它需要确认自己是否还是leader</li>
+<li>新leader除非commit了一条日志，否则它不能知道当前的commitIndex是多少</li>
+</ul>
+
+<h2 id="附录">附录</h2>
+
+<h3 id="raft伪代码">Raft伪代码</h3>
+
+<p><img src="/raft-basic/image-20191125113234210.png" alt="image-20191125113234210" /></p>
+</div>
+        <div class="post_footer">
+          
+          <div class="meta">
+            <div class="info">
+              <span class="field tags">
+                <i class="remixicon-stack-line"></i>
+                
+                <a href="https://www.meditations.ink/tags/%E5%88%86%E5%B8%83%E5%BC%8F/">分布式</a>
+                
+                <a href="https://www.meditations.ink/tags/raft/">raft</a>
+                
+              </span>
+            </div>
+          </div>
+          
+        </div>
+      </div>
+      
+      
+    </div>
+  </div>
+  <a id="back_to_top" href="#" class="back_to_top"><span>△</span></a>
+</div>
+<footer class="footer">
+  <div class="powered_by">
+    <a href="https://zeuk.me">Designed by Zeuk,</a>
+    <a href="http://www.gohugo.io/">Proudly published with Hugo</a>
+  </div>
+
+  <div class="footer_slogan">
+    <span>事实唯真，目的本位</span>
+  </div>
+</footer>
+
+
+
+<script src="https://www.meditations.ink/js/jquery-3.3.1.min.js"></script>
+<script src="https://www.meditations.ink/js/zozo.js"></script>
+<script src="https://www.meditations.ink/js/highlight.pack.js"></script>
+<link  href="https://www.meditations.ink/css/fancybox.min.css" rel="stylesheet">
+<script src="https://www.meditations.ink/js/fancybox.min.js"></script>
+
+<script>hljs.initHighlightingOnLoad()</script>
+
+
+  <script type="text/javascript" async src="https://cdn.bootcss.com/mathjax/2.7.5/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['$','$'], ['\\(','\\)']],
+    displayMath: [['$$','$$'], ['\[\[','\]\]']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+});
+
+MathJax.Hub.Queue(function() {
+    
+    
+    
+    var all = MathJax.Hub.getAllJax(), i;
+    for(i = 0; i < all.length; i += 1) {
+        all[i].SourceElement().parentNode.className += ' has-jax';
+    }
+});
+</script>
+
+<style>
+code.has-jax {
+    font: inherit;
+    font-size: 100%;
+    background: inherit;
+    border: inherit;
+    color: #515151;
+}
+</style>
+
+
+
+
+
+
+</body>
+</html>

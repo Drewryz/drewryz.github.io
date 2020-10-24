@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>c&#43;&#43; on 沉思录</title>
+    <link>https://www.meditations.ink/tags/c&#43;&#43;/</link>
+    <description>Recent content in c&#43;&#43; on 沉思录</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Mon, 30 Dec 2019 14:34:01 +0800</lastBuildDate>
+    
+	<atom:link href="https://www.meditations.ink/tags/c++/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>为什么需要右值引用</title>
+      <link>https://www.meditations.ink/posts/cpp-lvalue-reference/</link>
+      <pubDate>Mon, 30 Dec 2019 14:34:01 +0800</pubDate>
+      
+      <guid>https://www.meditations.ink/posts/cpp-lvalue-reference/</guid>
+      <description>C++所有表达式和变量要么是左值，要么是右值。 左值表示非临时对象 右值指临时对象，它们只在当前的语句中有效。 在C++11之前，除了用常量引用绑定右值一个右值之外，右值不能被引用： const int &amp;amp;a = 1; 这种情况下，右</description>
+    </item>
+    
+  </channel>
+</rss>

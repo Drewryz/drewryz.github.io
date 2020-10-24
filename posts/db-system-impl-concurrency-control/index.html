@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="zh-cn" >
+<head>
+  <meta charset="utf-8"/>
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+
+  
+  <meta name="author"
+        content="YZR"/>
+
+  
+  <meta name="description" content="引言 并发执行的事务之间相互影响，会使数据库处于不一致状态。因此各个事务的每个执行步骤，需要按照某种方式来规范。该规范是由调度器完成的。 事务对数据元素的请求会传递给调度器，调度器决定应该按照什么样的顺序"/>
+  
+
+  
+  
+  <meta name="keywords" content="Hugo, theme, zozo"/>
+  
+
+  
+  <link rel="canonical" href="https://www.meditations.ink/posts/db-system-impl-concurrency-control/"/>
+
+  
+
+  <title>数据库系统实现--并发控制 &middot; 沉思录</title>
+
+  <link rel="shortcut icon" href="https://www.meditations.ink/images/favicon.ico"/>
+  <link rel="stylesheet" href="https://www.meditations.ink/css/animate.min.css"/>
+  <link rel="stylesheet" href="https://www.meditations.ink/css/remixicon.css"/>
+  <link rel="stylesheet" href="https://www.meditations.ink/css/zozo.css"/>
+  <link rel="stylesheet" href="https://www.meditations.ink/css/highlight.css"/>
+
+  
+  
+</head>
+
+<body>
+<div class="main animated">
+  <div class="nav_container animated fadeInDown">
+  <div class="site_nav" id="site_nav">
+    <ul>
+      
+      <li>
+        <a href="/">首页</a>
+      </li>
+      
+      <li>
+        <a href="/posts/">归档</a>
+      </li>
+      
+      <li>
+        <a href="/tags/">标签</a>
+      </li>
+      
+      <li>
+        <a href="/about/">关于</a>
+      </li>
+      
+    </ul>
+  </div>
+  <div class="menu_icon">
+    <a id="menu_icon"><i class="remixicon-links-line"></i></a>
+  </div>
+</div>
+
+  <div class="header animated fadeInDown">
+  <div class="site_title_container">
+    <div class="site_title">
+      <h1>
+        <a href="https://www.meditations.ink">
+          <span>沉思录</span>
+          <img src="https://www.meditations.ink/images/logo.svg"/>
+        </a>
+      </h1>
+    </div>
+    <div class="description">
+      <p class="sub_title">Follow me</p>
+      <div class="my_socials">
+        
+        
+        <a href="https://github.com/Drewryz" title="github" target="_blank"><i class="remixicon-github-fill"></i></a>
+        
+        
+        <a href="https://www.meditations.ink/index.xml" type="application/rss+xml" title="rss" target="_blank"><i class="remixicon-rss-fill"></i></a>
+      </div>
+    </div>
+  </div>
+</div>
+
+  <div class="content">
+    <div class="post_page">
+      <div class="post animated fadeInDown">
+        <div class="post_title post_detail_title">
+          <h2><a href='/posts/db-system-impl-concurrency-control/'>数据库系统实现--并发控制</a></h2>
+          <span class="date">2019.12.21</span>
+        </div>
+        <div class="post_content markdown">
+
+<h2 id="引言">引言</h2>
+
+<p>并发执行的事务之间相互影响，会使数据库处于不一致状态。因此各个事务的每个执行步骤，需要按照某种方式来规范。该规范是由调度器完成的。
+<img src="/db-system-impl-concurrency-control/C799AC91-D34B-40F6-9C84-E39C5474F0AF.png" alt="d0cfc8878848ff8de6fe2fce882f8b1e" /></p>
+
+<p>事务对数据元素的请求会传递给调度器，调度器决定应该按照什么样的顺序，或者何时对元素进行读写。</p>
+
+<p>本章主要讨论：</p>
+
+<ul>
+<li>对于并发执行的事务，如何保持数据库状态的正确性
+
+<ul>
+<li>可串行性</li>
+<li>冲突可串行性</li>
+</ul></li>
+<li>封锁</li>
+<li>时间戳</li>
+<li>有效性确认</li>
+<li>两阶段封锁<br /></li>
+</ul>
+
+<h2 id="串行调度和可串行化调度">串行调度和可串行化调度</h2>
+
+<p>每个事务如果单独执行，会使数据库从任何一个一致的状态转换成另一个一致的状态。<br />
+现实是多个事务并发执行的，那应该如何调度，才能使数据库保持一致的状态。</p>
+
+<h3 id="调度">调度</h3>
+
+<p>调度指的是一个事务或者多个事务中每个步骤执行的先后序列。
+读写动作是发生在buffer中，而不是磁盘上。buffer中的数据可能会被多个事务读写。</p>
+
+<h3 id="串行调度">串行调度</h3>
+
+<p>先执行一个事务的所有动作，然后再执行另一个事务的所有动作，则称该调度为串行调度。<br />
+eg:<br />
+两个事务。其中，A和B是被缓存在buffer中的数据库元素，t和s是局部变量。
+<img src="/db-system-impl-concurrency-control/CC4AB02A-C39B-4ED3-8DF5-B577578D30F9.png" alt="a11fb063dfb1766a7b5c239d21b6160f" /><br />
+串行调度1(T1,T2):<br />
+<img src="/db-system-impl-concurrency-control/6F3E500A-C8A0-46A7-B4D9-3A08DA0C5361.png" alt="8e9fe66053a486e8d68bab06d461c999" /><br />
+串行调度2(T2,T1):</p>
+
+<p><img src="/db-system-impl-concurrency-control/9CE959A6-FAF3-476E-A1A8-35E9C0CCAA6D.png" alt="014f921f113c8251d603a80b8b1d3d93" /><br />
+注意：当A和B的初始值为25时，调度1和调度2都能保证数据库的最终状态是一致的，即A=B。但是调度1和调度2不能保证数据库的终态是相同的。调度1使A=B=250，调度2使A=B=150。</p>
+
+<h3 id="可串行化调度">可串行化调度</h3>
+
+<p>串行调度一定可以保证数据的一致性，但是还存在保证数据一致性的其他调度。
+对于一个串行调度S, 如果该调度的效果与串行调度的效果相同，则称调度S是可串行化的。
+可串行化调度：
+<img src="/db-system-impl-concurrency-control/47857B41-13EF-46E8-B619-1ADB03904834.png" alt="7aee88ab621f23a3be0378a0b21a2b3d" /><br />
+非可串行化调度:
+<img src="/db-system-impl-concurrency-control/66EA167B-8F74-4216-B7C6-424E5A6CC796.png" alt="3cd5f84986b04f108f35d7de40656caa" /></p>
+
+<h3 id="事务和调度的一种记法">事务和调度的一种记法</h3>
+
+<p><img src="/db-system-impl-concurrency-control/EBA7883D-CE54-4FF5-8AE9-B5283F3D4C2D.png" alt="7c7b927883baf0ddc6cd683bb83932f0" /></p>
+
+<h2 id="冲突可串行化">冲突可串行化</h2>
+
+<p>工程实践中，通常采用冲突可串行化的条件，该条件的约束性要比可串行化更强。<br />
+冲突：调度中的一对连续动作，如果这两个动作交换顺序，会使得调度涉及到的至少一个事务的行为错误。
+结论：不同事务的任何两个动作可以交换，除了以下情况会产生冲突且不能交换：
+<strong>它们涉及同一个数据库元素，且至少一个是写操作</strong><br />
+如果通过一系列相邻动作的非冲突交换能够将它们中的一个转换为另一个，我们说这两个调度是冲突等价的。如果一个调度冲突等价于一个串行调度，那么该调度是冲突可串行化的。</p>
+
+<p>例子：
+<img src="/db-system-impl-concurrency-control/F2305D79-BE9A-498C-97FA-598EE41A64D5.png" alt="7cd586eba455a18dda6df14c7ad9b1e7" /><br />
+详细论述过程如下：
+<img src="/db-system-impl-concurrency-control/08681B64-9230-4A7E-84FE-4032CC2BE786.png" alt="9646b64f6310c17a2b19f716010ae909" />
+<img src="/db-system-impl-concurrency-control/19E5AE94-0AE2-4782-8030-BA53FCA6EBD3.png" alt="f8bcc89aee8268dfd7925aa15f270e6d" /></p>
+
+<h3 id="优先图及冲突可串行化判断">优先图及冲突可串行化判断</h3>
+
+<p>如何判断一个调度S是冲突可串行化的？
+比较简单：
+不管S在任何地方出现了冲突动作，那么所有与S冲突等价的调度中，冲突动作的顺序与S相同。这些冲突动作其实对调度中事务的顺序加上了限制。如果这些限制不互相矛盾，那么该调度就是一个冲突等价的串行调度。
+OK，我们来规定一个调度中事务的优先级：
+对于调度S，其中涉及事务T1和T2,还可能有其他事务，对于T1的任何一个动作A1，以及T2的任何一个动作A2，如果：</p>
+
+<ol>
+<li>在S中，A1在A2前</li>
+<li>A1和A2涉及到同一个数据库元素</li>
+<li>A1和A2至少有一个写动作<br /></li>
+</ol>
+
+<p>那么，我们称调度S中，事务T1的优先级大于事务T2。记为：T1&lt;T2。
+我们有了事务优先级的规定以后，就可以将一个调度S中涉及到的所有事务的优先级用优先图来表示。<br />
+eg:</p>
+
+<pre><code>S:r2(A); r1(B); w2(A); r3(A); w1(B); w3(A); r2(B); w2(B);
+</code></pre>
+
+<p>按照我们上面的规定，S中T2的优先级大于T3，T1的优先级大于T2。因此我们有优先图：
+<img src="/db-system-impl-concurrency-control/11EE5FEC-7F66-4A15-AA82-80B7C084ED7E.png" alt="078d9b71ac8cfb44566a06ecff451ffa" /><br />
+因为该图中没有环，所以我们这个调度是冲突可串行化的。对于更复杂的优先图来说，可以用同样的方式判断，对于不存在环的优先图来说，图中的任何一个拓扑排序都是都是一个冲突等价的串行调度。
+我们可以将上面的调度S，通过无冲突的动作交换，得到真正的串行调度S':</p>
+
+<pre><code>S':r1(B); w1(B); r2(A); w2(A); r2(B); w2(B); r3(A); w3(A);
+</code></pre>
+
+<p>反之，考虑调度：</p>
+
+<pre><code>S1: r2(A); r1(B); w2(A); r2(B); r3(A); w1(B); w3(A); w2(B);
+</code></pre>
+
+<p>我们可以得到下面一个优先图：
+<img src="/db-system-impl-concurrency-control/F5A69133-073B-4E6C-BAA0-6473FF80266E.png" alt="676815b926ee127cbe19aae187b7e4cf" /><br />
+成环。说明该调度不是冲突可串行化的。</p>
+
+<h2 id="使用锁的可串行化实现">使用锁的可串行化实现</h2>
+
+<p>对于一个简单的基于锁的调度器，首先我们有以下记法：</p>
+
+<pre><code>li(X): 事务Ti请求数据库元素X上的锁
+ui(X): 事务Ti释放它在数据库元素X上的锁
+</code></pre>
+
+<p>有以下约束：</p>
+
+<ol>
+<li>事务只有在对数据库元素封锁之后才能读写该元素</li>
+<li>如果事务对某个元素封锁，它之后必须要为该元素解锁</li>
+<li>这里的锁是互斥的，即同一时刻最多只有一个事务持有某个元素的锁</li>
+</ol>
+
+<p>那么对于最开始的两个事务：
+<img src="/db-system-impl-concurrency-control/CC4AB02A-C39B-4ED3-8DF5-B577578D30F9.png" alt="a11fb063dfb1766a7b5c239d21b6160f" /><br />
+在施加锁以后，如下：
+<img src="/db-system-impl-concurrency-control/BDA730E9-7460-4819-858E-96B9BF8B1CA3.png" alt="6b47b5fd36d92352a1d9a45583d45863" /><br />
+下面是这两个事务的一个调度：
+<img src="/db-system-impl-concurrency-control/E39BA233-0A93-4A39-B7DD-062DC3F86BEE.png" alt="cd6207b25faf1b5fc3bd7dd417f9e107" /><br />
+可以看到这个调度不是可串行化的。
+但是，如果我们对调度添加如下约束(两阶段封锁条件)：</p>
+
+<blockquote>
+<p><strong>在每个事务中所有封锁请求先于解锁请求</strong></p>
+</blockquote>
+
+<p>那么对于事务T1和T2，有如下一种封锁方式：
+<img src="/db-system-impl-concurrency-control/888615B4-F007-436F-9A59-EDE4955B7FB5.png" alt="2776970d8ed0e87042f5cf1c7a2f7ce7" /><br />
+随之，可以有如下一种调度方式：
+<img src="/db-system-impl-concurrency-control/D148F3AE-A490-4221-9BB2-61E4CF3ED987.png" alt="ccbaa58ac00ffcacbd337621eecf3818" /><br />
+该调度中的事务满足两阶段封锁条件，为该调度确保了一致性。</p>
+
+<p>But，两阶段封锁这个条件可能会引发死锁：
+<img src="/db-system-impl-concurrency-control/5DD727C6-BF15-4736-B8A6-CC99F82A3434.png" alt="8c5d9470eedb79ed6c31d47729245443" /></p>
+
+<h2 id="更细粒度的封锁系统">更细粒度的封锁系统</h2>
+
+<p>上面说的，对数据库每一个元素无论读写都需要加锁，这种方式太过简单且不实用。例如，对于一个元素的读操作来说，只要没有事务对这个元素进行写操作，那么多个事务同时读这个元素是没有任何问题的。这促使我们需要更细粒度的加锁模式。</p>
+
+<h3 id="共享锁和排他锁">共享锁和排他锁</h3>
+
+<p>共享锁又叫读锁。排他锁又叫写锁。对于任意一个数据库元素X，其上要么没有锁，要么只有一个排他锁，或者有多个共享锁。
+记法：</p>
+
+<pre><code>sli(X)：事务Ti申请数据库元素X上的一个共享锁
+xli(X): 事务Ti申请数据库元素X上的一个排他锁
+ui(X): 事务Ti释放X上的锁
+</code></pre>
+
+<p>约束：</p>
+
+<ol>
+<li>读动作必须要申请相应元素的共享锁或者排他锁</li>
+<li>写动作必须要申请相应元素的排他锁</li>
+<li>存在一个事务申请了元素X的共享锁，则其他事务再对X申请排他锁，需等待</li>
+<li>存在一个事务申请了元素X的排他锁，则其他事务再对X申请锁，需等待</li>
+<li>同一个事务可以对同一个元素同时持有共享锁和排他锁</li>
+</ol>
+
+<p>两阶段封锁条件不变：</p>
+
+<blockquote>
+<p>在每个事务中所有的封锁请求先于解锁请求</p>
+</blockquote>
+
+<p>eg:<br />
+以下是两个事务：
+<img src="/db-system-impl-concurrency-control/8B42EDF5-E76D-42EB-8093-55DCB94EF8B2.png" alt="9b0b1f72b733c084da3a751d2bd4094c" /><br />
+则存在一个可能的调度：
+<img src="/db-system-impl-concurrency-control/BDCADF63-DA24-4595-A279-959B88BDE7F4.png" alt="0f81cf77a208f55740fa7519f3570d5c" /><br />
+以上调度是冲突可串行化的。
+排他锁和共享锁的锁相融矩阵：
+<img src="/db-system-impl-concurrency-control/A0F87484-728F-44C8-8829-B0A467392261.png" alt="62c3ee309d0c008a43d2604aeaaf91ca" /><br />
+行表示一个事务已经持有的锁，列表示另一个事务申请的锁，矩阵内容里，是，表示申请通过，否，表示需等待。</p>
+
+<h3 id="锁升级">锁升级</h3>
+
+<p>允许同一个事务可以对同一个元素先持有共享锁，然后再申请排他锁
+eg:
+以下两个事务：
+<img src="/db-system-impl-concurrency-control/1B4E0E39-BFB3-4F73-85BE-EB7E428F31C1.png" alt="ffc4754f588f0dd690244448f6bf767c" /><br />
+则存在一个可能的调度：
+<img src="/db-system-impl-concurrency-control/A19FD819-C696-4158-B8F3-BD575538674F.png" alt="12444c070a7546a0741b1e98c43588e9" /><br />
+以上调度是冲突可串行化的。
+注意，这个例子中，如果T1直接申请B的排他锁，与通过锁升级相比，效率会更低。因为T1申请B的共享锁，不会被阻塞，但是申请B的排他锁会被阻塞。
+But，锁升级更加容易带来死锁问题：
+<img src="/db-system-impl-concurrency-control/9B61759E-B081-49BC-9F42-7887F2851AEB.png" alt="41b5fdce21ed2eb78cc52e7870e990c7" /><br />
+解决的一种方式是，dbms中止其中一个事务，在另一个事务获得排他锁之后，再启动该事务。</p>
+
+<h3 id="更新锁">更新锁</h3>
+
+<p>解决上面提到的死锁问题的另一种方式是使用更新锁。我们对更新锁有以下定义：</p>
+
+<blockquote>
+<p>更新锁uli(X)只给予事务Ti读X的权限，但是更新锁可以在以后升级为排他锁，共享锁是不能升级的。
+当X上有共享锁时，可以再授予X上的更新锁，但是X上一旦有更新锁，我们就禁止在X上授予任何锁。</p>
+</blockquote>
+
+<p>其相容性矩阵如下：<br />
+<img src="/db-system-impl-concurrency-control/85AE17D3-759A-49F0-AF4C-DDC03A08A8C7.png" alt="0b2dfcca34a5a02efc1736a5b9581ca4" /><br />
+使用更新锁可以解决上面的死锁问题：在初始读取A时，我们不申请共享锁，而是申请更新锁<br />
+<img src="/db-system-impl-concurrency-control/B0DF49F4-89C9-4EBB-86FC-21DE3292DCD5.png" alt="f55573ded860fbc15577823426d44fb2" /><br />
+<img src="/db-system-impl-concurrency-control/3825907A-BFC7-4FDC-944D-414C655F2F1A.png" alt="735d58dbaaa823dcd47030a84633660b" /></p>
+
+<h3 id="增量锁">增量锁</h3>
+
+<p>如果我们将数据库系统对某个元素A的增量动作看成是原子的：</p>
+
+<pre><code>READ(A, t); t := t+c; WRITE(A, t)
+</code></pre>
+
+<p>那么，为了在排他锁的基础上，对增量这一动作进行优化，提出了增量锁的概念。
+用ili(X), 表示Ti请求X上的增量锁这一动作。事务Ti在数据库元素X上增加或减少某个常数的动作记为inci(X).
+约束：</p>
+
+<ol>
+<li>事务只有持有某个元素的增量锁之后，才能在该元素上进行增量操作。但是增量锁不能赋予读或者写的权限</li>
+<li>任意多个事务可以在同一个数据库元素上持有增量锁</li>
+<li>增量锁与其他事务的共享锁和排他锁冲突</li>
+</ol>
+
+<p>增量锁的相容性矩阵如下：<br />
+<img src="/db-system-impl-concurrency-control/06E2B5C8-F9A9-48AD-A0FE-74AD8DFEDD08.png" alt="8432cf04897da9baecdd31ba4b40a0e4" /><br />
+eg:<br />
+<img src="/db-system-impl-concurrency-control/868C83EB-94B0-42D6-AFCC-B1AF44C28AC5.png" alt="f2da1066c2a46c712b314a0713c94c30" /><br />
+调度如下：<br />
+<img src="/db-system-impl-concurrency-control/8B031068-8B75-45BB-813D-FEE1F1B9EA9C.png" alt="a94f9dffb008c156be3bab8beb94d1ff" /><br />
+注意该调度并不会阻塞任何一个事务的执行。</p>
+
+<h2 id="封锁调度器的一种体系结构">封锁调度器的一种体系结构</h2>
+
+<p>首先，调度器的具体实现有很多，我们接下来说的调度器的体系结构只是其中一种，这个调度器遵循以下原则：</p>
+
+<blockquote>
+<p>事务申请锁和释放锁的动作都委托给调度器
+事务的读写请求，都通过调度器来执行</p>
+</blockquote>
+
+<h3 id="调度器结构">调度器结构</h3>
+
+<p>这个调度器由两部分组成，它接受来自事务的诸如读、写、提交以及终止这样的请求。调度器还维护了一个锁表，这个锁表位于内存中，用于记录数据库每个元素的锁状态。
+<img src="/db-system-impl-concurrency-control/6E42B8B1-5FDF-49EA-AB05-E89FD5C587AB.png" alt="9db9303e360bfb2d28011a94cbb0480a" /></p>
+
+<ol>
+<li>调度器的第一部分接受事务的请求流，并在所有数据库的访问操作前插入适当的锁动作</li>
+<li>第二部分接收第一部分传来的封锁和数据库动作访问序列，并正确执行它们中的每一个。如果一个事务T已经被锁阻塞，那么再次接收到的事务T的请求时，会被放入事务T的待执行动作列表中。如果没有被阻塞，且动作是数据库访问，该动作会被直接执行，如果动作是封锁操作，调度器会判断锁是否可以被授予。
+
+<ul>
+<li>如果可以被授予，则在锁表中加入元素的锁信息</li>
+<li>如果不能，锁表中需要有一项记录，表明元素的锁已被申请。调度器会推迟事务的执行。</li>
+</ul></li>
+<li>如果事务提交或者终止，事务管理器会通知第一部分，第一部分会释放事务T涉及到的所有锁。如果有事务等待这些锁，第一部分会通知第二部分。</li>
+<li>第二部分被告知某个数据的元素的锁可以被获取时，它来决定如何授予锁给阻塞的事务，于是拿到锁的事务会继续执行。</li>
+</ol>
+
+<h3 id="锁表的结构">锁表的结构</h3>
+
+<p><img src="/db-system-impl-concurrency-control/25C22A54-0828-4562-930F-20139A1BB1D6.png" alt="7ee4d00ec193811bcb21cf33ebc826f3" /></p>
+</div>
+        <div class="post_footer">
+          
+          <div class="meta">
+            <div class="info">
+              <span class="field tags">
+                <i class="remixicon-stack-line"></i>
+                
+                <a href="https://www.meditations.ink/tags/%E6%95%B0%E6%8D%AE%E5%BA%93/">数据库</a>
+                
+              </span>
+            </div>
+          </div>
+          
+        </div>
+      </div>
+      
+      
+    </div>
+  </div>
+  <a id="back_to_top" href="#" class="back_to_top"><span>△</span></a>
+</div>
+<footer class="footer">
+  <div class="powered_by">
+    <a href="https://zeuk.me">Designed by Zeuk,</a>
+    <a href="http://www.gohugo.io/">Proudly published with Hugo</a>
+  </div>
+
+  <div class="footer_slogan">
+    <span>事实唯真，目的本位</span>
+  </div>
+</footer>
+
+
+
+<script src="https://www.meditations.ink/js/jquery-3.3.1.min.js"></script>
+<script src="https://www.meditations.ink/js/zozo.js"></script>
+<script src="https://www.meditations.ink/js/highlight.pack.js"></script>
+<link  href="https://www.meditations.ink/css/fancybox.min.css" rel="stylesheet">
+<script src="https://www.meditations.ink/js/fancybox.min.js"></script>
+
+<script>hljs.initHighlightingOnLoad()</script>
+
+
+  <script type="text/javascript" async src="https://cdn.bootcss.com/mathjax/2.7.5/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['$','$'], ['\\(','\\)']],
+    displayMath: [['$$','$$'], ['\[\[','\]\]']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+});
+
+MathJax.Hub.Queue(function() {
+    
+    
+    
+    var all = MathJax.Hub.getAllJax(), i;
+    for(i = 0; i < all.length; i += 1) {
+        all[i].SourceElement().parentNode.className += ' has-jax';
+    }
+});
+</script>
+
+<style>
+code.has-jax {
+    font: inherit;
+    font-size: 100%;
+    background: inherit;
+    border: inherit;
+    color: #515151;
+}
+</style>
+
+
+
+
+
+
+</body>
+</html>
