@@ -1,116 +1,113 @@
 <!DOCTYPE html>
 <html lang="zh-cn" >
 <head>
-  <meta charset="utf-8"/>
-  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="author" content="zaorangyang" />
+	
+	
+	
+	<title>MongoDB跨机房自动failover：并行复制全局锁造成的QPS掉底原因分析与解决 ｜ 沉思录</title>
+	
+    
+    
+    <meta name="description" content="背景 MongoDB是一个分布式数据库，底层数据通过Raft协议复制，原生支持数据强一致性以及分布式事务，支持副本集自动failover。一个典型的MongoDB集群拓扑如下图所示： mongos是代理层" />
+    
 
-  
-  <meta name="author"
-        content="zaorangyang"/>
+    
+    
+    <meta name="keywords" content="数据库, 存储, 技术" />
+    
 
-  
-  <meta name="description" content="背景 MongoDB是一个分布式数据库，底层数据通过Raft协议复制，原生支持数据强一致性以及分布式事务，支持副本集自动failover。一个典型的MongoDB集群拓扑如下图所示： mongos是代理层"/>
-  
+	
+    
+    <link rel="shortcut icon" href="https://zaorangyang.github.io/images/favicon.ico" />
 
-  
-  
-  <meta name="keywords" content="数据库, 存储, 技术"/>
-  
+    <link rel="stylesheet" type="text/css" media="screen" href="https://zaorangyang.github.io/css/normalize.css" />
+    <link rel="stylesheet" type="text/css" media="screen" href="https://cdn.jsdelivr.net/npm/animate.css@4.1.0/animate.min.css" />
+    <link rel="stylesheet" type="text/css" media="screen" href="https://zaorangyang.github.io/css/zozo.css" />
+	<link rel="stylesheet" type="text/css" media="screen" href="https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css" />
+    <link rel="stylesheet" type="text/css" media="screen" href="https://zaorangyang.github.io/css/highlight.css" />
 
-  
-  <link rel="canonical" href="https://zaorangyang.github.io/posts/mongo-parallel-batch-lock/"/>
-
-  
-
-  <title>MongoDB跨机房自动failover：并行复制全局锁造成的QPS掉底原因分析与解决 &middot; 沉思录</title>
-
-  <link rel="shortcut icon" href="https://zaorangyang.github.io/images/favicon.ico"/>
-  <link rel="stylesheet" href="https://zaorangyang.github.io/css/animate.min.css"/>
-  <link rel="stylesheet" href="https://zaorangyang.github.io/css/remixicon.css"/>
-  <link rel="stylesheet" href="https://zaorangyang.github.io/css/zozo.css"/>
-  <link rel="stylesheet" href="https://zaorangyang.github.io/css/highlight.css"/>
-
-  
-  
+    
+    
 </head>
 
 <body>
-<div class="main animated">
-  <div class="nav_container animated fadeInDown">
-  <div class="site_nav" id="site_nav">
-    <ul>
-      
-      <li>
-        <a href="/">首页</a>
-      </li>
-      
-      <li>
-        <a href="/posts/">归档</a>
-      </li>
-      
-      <li>
-        <a href="/tags/">标签</a>
-      </li>
-      
-      <li>
-        <a href="/about/me">关于</a>
-      </li>
-      
-    </ul>
-  </div>
-  <div class="menu_icon">
-    <a id="menu_icon"><i class="remixicon-links-line"></i></a>
-  </div>
-</div>
-
-  <div class="header animated fadeInDown">
-  <div class="site_title_container">
-    <div class="site_title">
-      <h1>
-        <a href="https://zaorangyang.github.io/">
-          <span>沉思录</span>
-          <img src="https://zaorangyang.github.io/images/logo.svg"/>
-        </a>
-      </h1>
+    <div class="main animate__animated animate__fadeInDown">
+        <div class="nav_container animated fadeInDown">
+    <div class="site_nav" id="site_nav">
+        <ul>
+            
+            <li>
+                <a href="/">首页</a>
+            </li>
+            
+            <li>
+                <a href="/posts/">归档</a>
+            </li>
+            
+            <li>
+                <a href="/tags/">标签</a>
+            </li>
+            
+            <li>
+                <a href="/about/me">关于</a>
+            </li>
+            
+        </ul>
     </div>
-    <div class="description">
-      <p class="sub_title">
+    <div class="menu_icon">
+        <a id="menu_icon"><i class="ri-menu-line"></i></a>
+    </div>
+</div>
+        <div class="header animated fadeInDown">
+    <div class="site_title_container">
+        <div class="site_title">
+            <h1>
+                <a href="https://zaorangyang.github.io/">
+                    <span>沉思录</span>
+                </a>
+            </h1>
+        </div>
+        <div class="description">
+            <p class="sub_title">
 
 
 							</p>
-      <div class="my_socials">
-        
-        
-        <a href="https://github.com/zaorangyang" title="github" target="_blank"><i class="remixicon-github-fill"></i></a>
-        
-        
-        
-        <a href="mailto:zaorangy@gmail.com" title="mail" target="_blank"><i class="remixicon-mail-fill"></i></a>
-        
-        
-        
-        <a href="https://twitter.com/yu_yang_r" title="twitter" target="_blank"><i class="remixicon-twitter-fill"></i></a>
-        
-        
-        
-        <a href="https://www.zhihu.com/people/yangzaorang/posts" title="zhihu" target="_blank"><i class="remixicon-zhihu-fill"></i></a>
-        
-        
-        <a href="https://zaorangyang.github.io/index.xml" type="application/rss+xml" title="rss" target="_blank"><i class="remixicon-rss-fill"></i></a>
-      </div>
-    </div>
-  </div>
-</div>
-
-  <div class="content">
-    <div class="post_page">
-      <div class="post animated fadeInDown">
-        <div class="post_title post_detail_title">
-          <h2><a href='/posts/mongo-parallel-batch-lock/'>MongoDB跨机房自动failover：并行复制全局锁造成的QPS掉底原因分析与解决</a></h2>
-          <span class="date">2020.07.23</span>
+            <div class="my_socials">
+                
+                
+                <a href="https://github.com/zaorangyang" title="github" target="_blank"><i class="ri-github-fill"></i></a>
+                
+                
+                
+                <a href="mailto:zaorangy@gmail.com" title="mail" target="_blank"><i class="ri-mail-fill"></i></a>
+                
+                
+                
+                <a href="https://twitter.com/yu_yang_r" title="twitter" target="_blank"><i class="ri-twitter-fill"></i></a>
+                
+                
+                
+                <a href="https://www.zhihu.com/people/yangzaorang/posts" title="zhihu" target="_blank"><i class="ri-zhihu-fill"></i></a>
+                
+                
+                <a href="https://zaorangyang.github.io/index.xml" type="application/rss+xml" title="rss" target="_blank"><i
+                        class="ri-rss-fill"></i></a>
+            </div>
         </div>
-        <div class="post_content markdown"><h2 id="背景">背景</h2>
+    </div>
+</div>
+        <div class="content">
+            <div class="post_page">
+                <div class="post animate__animated animate__fadeInDown">
+                    <div class="post_title post_detail_title">
+                        <h2><a href='/posts/mongo-parallel-batch-lock/'>MongoDB跨机房自动failover：并行复制全局锁造成的QPS掉底原因分析与解决</a></h2>
+                        <span class="date">2020.07.23</span>
+                    </div>
+                    <div class="post_content markdown"><h2 id="背景">背景</h2>
 <p>MongoDB是一个分布式数据库，底层数据通过Raft协议复制，原生支持数据强一致性以及分布式事务，支持副本集自动failover。一个典型的MongoDB集群拓扑如下图所示：
 <img src="/mongo-parallel-batch-lock/mongos%E6%9E%B6%E6%9E%84-3.jpg" alt="3550b65921679ad56ffaabe949b176c9.jpeg"><br>
 mongos是代理层，用于对用户的请求做路由。存储集群一般由三个节点组成，且通过Raft复制数据，选主后，Primary节点处理用户所有的写请求，Secondary节点基于Raft协议拉取Primary节点的oplog(类似MySQL binlog)，进行数据回放，完成数据复制。为了保证数据的强一致性，从理论上说，Raft协议要求Primary节点处理用户的所有请求，包括读操作和写操作，并且只有当写操作写入多数节点才向用户返回数据写入成功。但是数据一致性与数据库性能(吞吐、时延)往往是不可兼顾的，对于一个多节点的存储集群来说，强一致性需要更多的网络交互与数据等待，因此会造成query时延的升高。在工程实践上，几乎所有的基于Raft协议实现failover的存储产品都会对Raft做出一些改动，引入更加&quot;松弛&quot;的数据一致性约束，来换取更好的性能。MongoDB也不例外，但是它对用户提供了一个更加灵活和友好的一致性视图：对于一条query的一致性强弱，可以通过用户自身灵活控制。
@@ -310,25 +307,32 @@ ResourceLock是对Locker的封装，根据传入的locker对象和RecourdeId完�
 <li>优先使用业务层提供的工具排查问题，而不是操作系统提供的工具。</li>
 </ul>
 </div>
-        <div class="post_footer">
-          
-          <div class="meta">
-            <div class="info">
-              <span class="field tags">
-                <i class="remixicon-stack-line"></i>
+                    <div class="post_footer">
+                        
+                        <div class="meta">
+                            <div class="info">
+                                <span class="field tags">
+                                    <i class="ri-stack-line"></i>
+                                    
+                                    <a href="https://zaorangyang.github.io/tags/%E6%95%B0%E6%8D%AE%E5%BA%93/">数据库</a>
+                                    
+                                    <a href="https://zaorangyang.github.io/tags/%E6%8D%89%E8%99%AB/">捉虫</a>
+                                    
+                                    <a href="https://zaorangyang.github.io/tags/mongo/">mongo</a>
+                                    
+                                    <a href="https://zaorangyang.github.io/tags/%E6%80%A7%E8%83%BD%E8%B0%83%E4%BC%98/">性能调优</a>
+                                    
+                                </span>
+                            </div>
+                        </div>
+                        
+                    </div>
+                </div>
                 
-                <a href="https://zaorangyang.github.io/tags/%E6%95%B0%E6%8D%AE%E5%BA%93/">数据库</a>
                 
-                <a href="https://zaorangyang.github.io/tags/%E6%8D%89%E8%99%AB/">捉虫</a>
+                <div class="doc_comments"></div>
                 
-                <a href="https://zaorangyang.github.io/tags/mongo/">mongo</a>
-                
-                <a href="https://zaorangyang.github.io/tags/%E6%80%A7%E8%83%BD%E8%B0%83%E4%BC%98/">性能调优</a>
-                
-              </span>
             </div>
-          </div>
-          
         </div>
       </div>
       <script src="https://utteranc.es/client.js"
@@ -342,69 +346,63 @@ ResourceLock是对Locker的封装，根据传入的locker对象和RecourdeId完�
       
       
     </div>
-  </div>
-  <a id="back_to_top" href="#" class="back_to_top"><span>△</span></a>
-</div>
-<footer class="footer">
-  <div class="powered_by">
-    <a href="https://github.com/varkai/hugo-theme-zozo">Theme Zozo,</a>
-    <a href="http://www.gohugo.io/">Proudly published with Hugo</a>
-  </div>
+    <a id="back_to_top" href="#" class="back_to_top"><i class="ri-arrow-up-s-line"></i></a>
+    <footer class="footer">
+    <div class="powered_by">
+        <a href="https://varkai.com">Designed by VarKai,</a>
+        <a href="http://www.gohugo.io/">Proudly published with Hugo</a>
+    </div>
 
-  <div class="footer_slogan">
-    <span></span>
-  </div>
+    <div class="footer_slogan">
+        <span></span>
+    </div>
 </footer>
 
-
-
-<script src="https://zaorangyang.github.io/js/jquery-3.3.1.min.js"></script>
-<script src="https://zaorangyang.github.io/js/zozo.js"></script>
-<script src="https://zaorangyang.github.io/js/highlight.pack.js"></script>
-<link  href="https://zaorangyang.github.io/css/fancybox.min.css" rel="stylesheet">
+    <script src="https://zaorangyang.github.io/js/jquery-3.5.1.min.js"></script>
+<link href="https://zaorangyang.github.io/css/fancybox.min.css" rel="stylesheet">
 <script src="https://zaorangyang.github.io/js/fancybox.min.js"></script>
+<script src="https://zaorangyang.github.io/js/zozo.js"></script>
 
-<script>hljs.initHighlightingOnLoad()</script>
 
+<script type="text/javascript" async
+    src="https://cdn.bootcss.com/mathjax/2.7.5/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+        MathJax.Hub.Config({
+            tex2jax: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\[\[', '\]\]']],
+                processEscapes: true,
+                processEnvironments: true,
+                skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+                TeX: {
+                    equationNumbers: { autoNumber: "AMS" },
+                    extensions: ["AMSmath.js", "AMSsymbols.js"]
+                }
+            }
+        });
 
-  <script type="text/javascript" async src="https://cdn.bootcss.com/mathjax/2.7.5/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
-MathJax.Hub.Config({
-  tex2jax: {
-    inlineMath: [['$','$'], ['\\(','\\)']],
-    displayMath: [['$$','$$'], ['\[\[','\]\]']],
-    processEscapes: true,
-    processEnvironments: true,
-    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
-    TeX: { equationNumbers: { autoNumber: "AMS" },
-         extensions: ["AMSmath.js", "AMSsymbols.js"] }
-  }
-});
-
-MathJax.Hub.Queue(function() {
-    
-    
-    
-    var all = MathJax.Hub.getAllJax(), i;
-    for(i = 0; i < all.length; i += 1) {
-        all[i].SourceElement().parentNode.className += ' has-jax';
-    }
-});
-</script>
+        MathJax.Hub.Queue(function () {
+            
+            
+            
+            var all = MathJax.Hub.getAllJax(), i;
+            for (i = 0; i < all.length; i += 1) {
+                all[i].SourceElement().parentNode.className += ' has-jax';
+            }
+        });
+    </script>
 
 <style>
-code.has-jax {
-    font: inherit;
-    font-size: 100%;
-    background: inherit;
-    border: inherit;
-    color: #515151;
-}
+    code.has-jax {
+        font: inherit;
+        font-size: 100%;
+        background: inherit;
+        border: inherit;
+        color: #515151;
+    }
 </style>
 
 
 
-
-
-
 </body>
+
 </html>
