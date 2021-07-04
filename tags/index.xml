@@ -2,93 +2,93 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
     <title>Tags on 沉思录</title>
-    <link>https://www.meditations.ink/tags/</link>
+    <link>https://zaorangyang.github.io/tags/</link>
     <description>Recent content in Tags on 沉思录</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>zh-cn</language>
     <lastBuildDate>Thu, 23 Jul 2020 17:47:57 +0800</lastBuildDate>
     
-	<atom:link href="https://www.meditations.ink/tags/index.xml" rel="self" type="application/rss+xml" />
+	<atom:link href="https://zaorangyang.github.io/tags/index.xml" rel="self" type="application/rss+xml" />
     
     
     <item>
       <title>mongo</title>
-      <link>https://www.meditations.ink/tags/mongo/</link>
+      <link>https://zaorangyang.github.io/tags/mongo/</link>
       <pubDate>Thu, 23 Jul 2020 17:47:57 +0800</pubDate>
       
-      <guid>https://www.meditations.ink/tags/mongo/</guid>
+      <guid>https://zaorangyang.github.io/tags/mongo/</guid>
       <description></description>
     </item>
     
     <item>
       <title>性能调优</title>
-      <link>https://www.meditations.ink/tags/%E6%80%A7%E8%83%BD%E8%B0%83%E4%BC%98/</link>
+      <link>https://zaorangyang.github.io/tags/%E6%80%A7%E8%83%BD%E8%B0%83%E4%BC%98/</link>
       <pubDate>Thu, 23 Jul 2020 17:47:57 +0800</pubDate>
       
-      <guid>https://www.meditations.ink/tags/%E6%80%A7%E8%83%BD%E8%B0%83%E4%BC%98/</guid>
+      <guid>https://zaorangyang.github.io/tags/%E6%80%A7%E8%83%BD%E8%B0%83%E4%BC%98/</guid>
       <description></description>
     </item>
     
     <item>
       <title>捉虫</title>
-      <link>https://www.meditations.ink/tags/%E6%8D%89%E8%99%AB/</link>
+      <link>https://zaorangyang.github.io/tags/%E6%8D%89%E8%99%AB/</link>
       <pubDate>Thu, 23 Jul 2020 17:47:57 +0800</pubDate>
       
-      <guid>https://www.meditations.ink/tags/%E6%8D%89%E8%99%AB/</guid>
+      <guid>https://zaorangyang.github.io/tags/%E6%8D%89%E8%99%AB/</guid>
       <description></description>
     </item>
     
     <item>
       <title>数据库</title>
-      <link>https://www.meditations.ink/tags/%E6%95%B0%E6%8D%AE%E5%BA%93/</link>
+      <link>https://zaorangyang.github.io/tags/%E6%95%B0%E6%8D%AE%E5%BA%93/</link>
       <pubDate>Thu, 23 Jul 2020 17:47:57 +0800</pubDate>
       
-      <guid>https://www.meditations.ink/tags/%E6%95%B0%E6%8D%AE%E5%BA%93/</guid>
+      <guid>https://zaorangyang.github.io/tags/%E6%95%B0%E6%8D%AE%E5%BA%93/</guid>
       <description></description>
     </item>
     
     <item>
       <title>网络</title>
-      <link>https://www.meditations.ink/tags/%E7%BD%91%E7%BB%9C/</link>
+      <link>https://zaorangyang.github.io/tags/%E7%BD%91%E7%BB%9C/</link>
       <pubDate>Sun, 17 May 2020 22:47:57 +0800</pubDate>
       
-      <guid>https://www.meditations.ink/tags/%E7%BD%91%E7%BB%9C/</guid>
+      <guid>https://zaorangyang.github.io/tags/%E7%BD%91%E7%BB%9C/</guid>
       <description></description>
     </item>
     
     <item>
       <title>c&#43;&#43;</title>
-      <link>https://www.meditations.ink/tags/c&#43;&#43;/</link>
+      <link>https://zaorangyang.github.io/tags/c&#43;&#43;/</link>
       <pubDate>Mon, 30 Dec 2019 14:34:01 +0800</pubDate>
       
-      <guid>https://www.meditations.ink/tags/c&#43;&#43;/</guid>
+      <guid>https://zaorangyang.github.io/tags/c&#43;&#43;/</guid>
       <description></description>
     </item>
     
     <item>
       <title>raft</title>
-      <link>https://www.meditations.ink/tags/raft/</link>
+      <link>https://zaorangyang.github.io/tags/raft/</link>
       <pubDate>Mon, 21 Oct 2019 08:11:04 +0800</pubDate>
       
-      <guid>https://www.meditations.ink/tags/raft/</guid>
+      <guid>https://zaorangyang.github.io/tags/raft/</guid>
       <description></description>
     </item>
     
     <item>
       <title>分布式</title>
-      <link>https://www.meditations.ink/tags/%E5%88%86%E5%B8%83%E5%BC%8F/</link>
+      <link>https://zaorangyang.github.io/tags/%E5%88%86%E5%B8%83%E5%BC%8F/</link>
       <pubDate>Mon, 21 Oct 2019 08:11:04 +0800</pubDate>
       
-      <guid>https://www.meditations.ink/tags/%E5%88%86%E5%B8%83%E5%BC%8F/</guid>
+      <guid>https://zaorangyang.github.io/tags/%E5%88%86%E5%B8%83%E5%BC%8F/</guid>
       <description></description>
     </item>
     
     <item>
       <title>MySQL</title>
-      <link>https://www.meditations.ink/tags/mysql/</link>
+      <link>https://zaorangyang.github.io/tags/mysql/</link>
       <pubDate>Mon, 17 Jun 2019 19:22:09 +0800</pubDate>
       
-      <guid>https://www.meditations.ink/tags/mysql/</guid>
+      <guid>https://zaorangyang.github.io/tags/mysql/</guid>
       <description></description>
     </item>
     
