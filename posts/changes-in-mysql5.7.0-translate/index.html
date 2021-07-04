@@ -15,7 +15,7 @@
 
   
   
-  <meta name="keywords" content="Hugo, theme, zozo"/>
+  <meta name="keywords" content="数据库, 存储, 技术"/>
   
 
   
@@ -54,7 +54,7 @@
       </li>
       
       <li>
-        <a href="/about/">关于</a>
+        <a href="/about/me">关于</a>
       </li>
       
     </ul>
@@ -75,11 +75,26 @@
       </h1>
     </div>
     <div class="description">
-      <p class="sub_title">Follow me</p>
+      <p class="sub_title">
+
+
+							</p>
       <div class="my_socials">
         
         
-        <a href="https://github.com/Drewryz" title="github" target="_blank"><i class="remixicon-github-fill"></i></a>
+        <a href="https://github.com/zaorangyang" title="github" target="_blank"><i class="remixicon-github-fill"></i></a>
+        
+        
+        
+        <a href="mailto:zaorangy@gmail.com" title="mail" target="_blank"><i class="remixicon-mail-fill"></i></a>
+        
+        
+        
+        <a href="https://twitter.com/yu_yang_r" title="twitter" target="_blank"><i class="remixicon-twitter-fill"></i></a>
+        
+        
+        
+        <a href="https://www.zhihu.com/people/yangzaorang/posts" title="zhihu" target="_blank"><i class="remixicon-zhihu-fill"></i></a>
         
         
         <a href="https://www.meditations.ink/index.xml" type="application/rss+xml" title="rss" target="_blank"><i class="remixicon-rss-fill"></i></a>
@@ -95,58 +110,42 @@
           <h2><a href='/posts/changes-in-mysql5.7.0-translate/'>[MySQL Release Notes] MySQL5.7.0翻译</a></h2>
           <span class="date">2019.06.17</span>
         </div>
-        <div class="post_content markdown">
-
-<h1 id="mysql-release-notes-mysql5-7-0翻译">[MySQL Release Notes] MySQL5.7.0翻译</h1>
-
-<p>翻译自：<a href="https://dev.mysql.com/doc/relnotes/mysql/5.7/en/news-5-7-0.html">https://dev.mysql.com/doc/relnotes/mysql/5.7/en/news-5-7-0.html</a></p>
-
-<h2 id="诊断记录-diagnostics-notes">诊断记录(Diagnostics Notes)</h2>
-
+        <div class="post_content markdown"><h1 id="mysql-release-notes-mysql570翻译">[MySQL Release Notes] MySQL5.7.0翻译</h1>
+<p>翻译自：https://dev.mysql.com/doc/relnotes/mysql/5.7/en/news-5-7-0.html</p>
+<h2 id="诊断记录diagnostics-notes">诊断记录(Diagnostics Notes)</h2>
 <p>MySQL现在支持堆栈诊断区域。当push诊断信息到诊断区域栈时，当前的诊断区域将成为第二个诊断区域，并创建一个新的当前诊断区域作为它的副本。在诊断condition处理函数中，正在执行的语句修改新的当前诊断区域，同时，<a href="https://dev.mysql.com/doc/refman/5.7/en/get-diagnostics.html"><code>GET STACKED DIAGNOSTICS</code></a>语句可以用于检测堆栈，用于获得导致处理程序被触发的condition，而不必依赖当前的condition。之前，只有一个诊断区域，所以，如果要检查处理程序中handler的激活condition，必须要在可能更改handler的语句之前检查该区域(否则，诊断区域可能会被覆盖)。参见<a href="https://dev.mysql.com/doc/refman/5.7/en/get-diagnostics.html">GET DIAGNOSTICS Syntax</a>和<a href="https://dev.mysql.com/doc/refman/5.7/en/diagnostics-area.html">The MySQL Diagnostics Area</a>。</p>
-
 <h3 id="重要变化-replication">重要变化 Replication</h3>
-
 <p>如果从库的SQL线程正在应用大型更新，那么<a href="https://dev.mysql.com/doc/refman/5.7/en/show-slave-status.html"><code>SHOW SLAVE STATUS</code></a>可能需要很长时间才能执行完毕。为了解决这个问题，在<a href="https://dev.mysql.com/doc/refman/5.7/en/show-slave-status.html"><code>SHOW SLAVE STATUS</code></a>语句中添加了一个新的非阻塞选项。使用此选项，该语句不等待SQL线程或者I/O线程，而是立刻返回。这意味着，当使用该选项的时候，<a href="https://dev.mysql.com/doc/refman/5.7/en/show-slave-status.html"><code>SHOW SLAVE STATUS</code></a>返回的状态可能不是最新的。该选项主要用于监控工具，对于这些工具来说，获得及时响应比获得最新的数据更重要。(Bug #15993588, Bug #67879)</p>
-
 <h3 id="重要变化-replication-1">重要变化 Replication</h3>
-
 <p>为mysqlbinlog添加了—idempotent选项，这使得MySQL服务器采用幂等方式复制。这会导致在处理binglog更新时抑制所有重复键和键未找到错误。此模式只对当前mysqlbinglog的客户端和客户端会话有效。</p>
-
-<h3 id="重要变化-insert-delayed-https-dev-mysql-com-doc-refman-5-7-en-insert-html">重要变化 <a href="https://dev.mysql.com/doc/refman/5.7/en/insert.html"><code>INSERT DELAYED</code></a></h3>
-
+<h3 id="重要变化-insert-delayedhttpsdevmysqlcomdocrefman57eninserthtml">重要变化 <a href="https://dev.mysql.com/doc/refman/5.7/en/insert.html"><code>INSERT DELAYED</code></a></h3>
 <p>不再支持延迟插入。服务器识别并忽略DELAYED关键字，将插入处理为非延迟插入，同时会生成er_warn_legacy_syntax_conversion警告。(“INSERT DELAYED is no longer supported. The statement was converted to INSERT.”). 同时，DELAYED关键词将在未来版本中删除。</p>
-
 <p>此外，删除了几个延迟相关的选项或特性:</p>
-
 <ul>
-<li><p>mysqldump的--delayed-insert选项</p></li>
-
-<li><p>Performance Schema库的table_lock_waits_summary_by_table表中的列：COUNT_WRITE_DELAYED<code>,</code>SUM_TIMER_WRITE_DELAYED<code>,</code>MIN_TIMER_WRITE_DELAYED<code>,</code>AVG_TIMER_WRITE_DELAYED<code>, and</code>MAX_TIMER_WRITE_DELAYED</p></li>
-</ul>
-
+<li>
+<p>mysqldump的&ndash;delayed-insert选项</p>
+</li>
+<li>
+<p>Performance Schema库的table_lock_waits_summary_by_table表中的列：COUNT_WRITE_DELAYED<code>, </code>SUM_TIMER_WRITE_DELAYED<code>, </code>MIN_TIMER_WRITE_DELAYED<code>, </code>AVG_TIMER_WRITE_DELAYED<code>, and</code>MAX_TIMER_WRITE_DELAYED</p>
 <p>如果从早期版本升级到这个MySQL版本，必须运行mysql_upgrade(并重启服务器)，以便将这些更改合并到performance_schema数据库中。</p>
-
-<ul>
-<li>mysqlbinlog不会再将INSERT DELAYED写入到注释中。</li>
+</li>
+<li>
+<p>mysqlbinlog不会再将INSERT DELAYED写入到注释中。</p>
+</li>
 </ul>
-
 <h3 id="microsoft-windows">Microsoft Windows</h3>
-
 <p>略过</p>
-
 <h3 id="others">others</h3>
-
 <ul>
 <li>以前，如果有在运行的语句，mysql中的Control+C会中断该语句，如果没有，则退出mysql。现在Control+C中断当前语句(如果有的话)，或者取消任何部分输入行，但是不退出。(Bug #66583, Bug #14554568)。</li>
 <li>如果创建的索引与现有索引重复，或者在严格S模式下出现错误，服务器将发出警告。(Bug #37520, Bug #11748842)。</li>
-<li>对于服务器要求接收的密码是明文、不进行散列的场景，可以使用mysql_clear_password插件。因为密码是明文发送的，所以该插件应该在加密的上下文中使用，比如SSL连接，以避免密码暴露在网络中。为了减少以为使用此插件的可能，现在需要客服端显式启用它。mysql、mysqladmin和mysqlslap支持--enable-cleartext-plugin选项，该选项在每次调用的基础上启用插件。
-
+<li>对于服务器要求接收的密码是明文、不进行散列的场景，可以使用mysql_clear_password插件。因为密码是明文发送的，所以该插件应该在加密的上下文中使用，比如SSL连接，以避免密码暴露在网络中。为了减少以为使用此插件的可能，现在需要客服端显式启用它。mysql、mysqladmin和mysqlslap支持&ndash;enable-cleartext-plugin选项，该选项在每次调用的基础上启用插件。
 <ul>
 <li>将LIBMYSQL_ENABLE_CLEARTEXT_PLUGIN环境变量设置为以1、Y或Y开头的值。</li>
-<li>mysql、mysqladmin和mysqlslap支持--enable-cleartext-plugin选项，该选项在每次调用的基础上启用插件。</li>
+<li>mysql、mysqladmin和mysqlslap支持&ndash;enable-cleartext-plugin选项，该选项在每次调用的基础上启用插件。</li>
 <li>mysql_options() C API函数支持MYSQL_ENABLE_CLEARTEXT_PLUGIN选项，该选项在每个连接的基础上启用插件。此外，任何使用libmysqlclient并读取选项文件的程序都可以通过在客户端库读取的选项组中包含enable-cleartext-plugin选项来启用插件。</li>
-</ul></li>
+</ul>
+</li>
 </ul>
 </div>
         <div class="post_footer">
@@ -164,6 +163,14 @@
           
         </div>
       </div>
+      <script src="https://utteranc.es/client.js"
+          repo="zaorangyang/zaorangyang.github.io"
+          issue-term="pathname"
+          theme="github-light"
+          crossorigin="anonymous"
+          async>
+      </script>
+
       
       
     </div>
@@ -172,12 +179,12 @@
 </div>
 <footer class="footer">
   <div class="powered_by">
-    <a href="https://zeuk.me">Designed by Zeuk,</a>
+    <a href="https://github.com/varkai/hugo-theme-zozo">Theme Zozo,</a>
     <a href="http://www.gohugo.io/">Proudly published with Hugo</a>
   </div>
 
   <div class="footer_slogan">
-    <span>事实唯真，目的本位</span>
+    <span></span>
   </div>
 </footer>
 

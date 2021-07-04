@@ -7,7 +7,7 @@
 
   
   <meta name="author"
-        content="YZR"/>
+        content="zaorangyang"/>
 
   
   <meta name="description" content="C&#43;&#43;所有表达式和变量要么是左值，要么是右值。 左值表示非临时对象 右值指临时对象，它们只在当前的语句中有效。 在C&#43;&#43;11之前，除了用常量引用绑定右值一个右值之外，右值不能被引用： const int &amp;amp;a = 1; 这种情况下，右"/>
@@ -15,7 +15,7 @@
 
   
   
-  <meta name="keywords" content="Hugo, theme, zozo"/>
+  <meta name="keywords" content="数据库, 存储, 技术"/>
   
 
   
@@ -54,7 +54,7 @@
       </li>
       
       <li>
-        <a href="/about/">关于</a>
+        <a href="/about/me">关于</a>
       </li>
       
     </ul>
@@ -75,11 +75,26 @@
       </h1>
     </div>
     <div class="description">
-      <p class="sub_title">Follow me</p>
+      <p class="sub_title">
+
+
+							</p>
       <div class="my_socials">
         
         
-        <a href="https://github.com/Drewryz" title="github" target="_blank"><i class="remixicon-github-fill"></i></a>
+        <a href="https://github.com/zaorangyang" title="github" target="_blank"><i class="remixicon-github-fill"></i></a>
+        
+        
+        
+        <a href="mailto:zaorangy@gmail.com" title="mail" target="_blank"><i class="remixicon-mail-fill"></i></a>
+        
+        
+        
+        <a href="https://twitter.com/yu_yang_r" title="twitter" target="_blank"><i class="remixicon-twitter-fill"></i></a>
+        
+        
+        
+        <a href="https://www.zhihu.com/people/yangzaorang/posts" title="zhihu" target="_blank"><i class="remixicon-zhihu-fill"></i></a>
         
         
         <a href="https://www.meditations.ink/index.xml" type="application/rss+xml" title="rss" target="_blank"><i class="remixicon-rss-fill"></i></a>
@@ -95,32 +110,19 @@
           <h2><a href='/posts/cpp-lvalue-reference/'>为什么需要右值引用</a></h2>
           <span class="date">2019.12.30</span>
         </div>
-        <div class="post_content markdown">
-
-<ul>
-<li>C++所有表达式和变量要么是左值，要么是右值。<br /></li>
-<li>左值表示非临时对象<br /></li>
-<li>右值指临时对象，它们只在当前的语句中有效。<br /></li>
+        <div class="post_content markdown"><ul>
+<li>C++所有表达式和变量要么是左值，要么是右值。</li>
+<li>左值表示非临时对象</li>
+<li>右值指临时对象，它们只在当前的语句中有效。</li>
 </ul>
-
 <p>在C++11之前，除了用常量引用绑定右值一个右值之外，右值不能被引用：</p>
-
 <pre><code>const int &amp;a = 1;
-</code></pre>
-
-<p>这种情况下，右值不能被修改，这与实际的场景不符，因为实际场景中右值是可以被修改的：</p>
-
+</code></pre><p>这种情况下，右值不能被修改，这与实际的场景不符，因为实际场景中右值是可以被修改的：</p>
 <pre><code>T().set().get()
-</code></pre>
-
-<p>T 是一个类，set 是一个函数为 T 中的一个变量赋值，get 用来取出这个变量的值。在这句中，T() 生成一个临时对象，就是右值，set() 修改了变量的值，也就修改了这个右值。</p>
-
+</code></pre><p>T 是一个类，set 是一个函数为 T 中的一个变量赋值，get 用来取出这个变量的值。在这句中，T() 生成一个临时对象，就是右值，set() 修改了变量的值，也就修改了这个右值。</p>
 <p>既然右值可以被修改，那么就可以实现右值引用。右值引用能够方便地解决实际工程中的问题，实现非常有吸引力的解决方案。</p>
-
 <h2 id="左值和右值的语法符号">左值和右值的语法符号</h2>
-
 <p>左值的声明符号为”&amp;”， 为了和左值区分，右值的声明符号为”&amp;&amp;”。</p>
-
 <pre><code>void process_value(int&amp; i) { 
  std::cout &lt;&lt; &quot;LValue processed: &quot; &lt;&lt; i &lt;&lt; std::endl; 
 } 
@@ -134,18 +136,11 @@ int main() {
  process_value(a); 
  process_value(1); 
 }
-</code></pre>
-
-<p>结果：</p>
-
+</code></pre><p>结果：</p>
 <pre><code>LValue processed: 0 
 RValue processed: 1
-</code></pre>
-
-<p>Process_value 函数被重载，分别接受左值和右值。由输出结果可以看出，临时对象是作为右值处理的。</p>
-
+</code></pre><p>Process_value 函数被重载，分别接受左值和右值。由输出结果可以看出，临时对象是作为右值处理的。</p>
 <p>但是不能把右值引用绑定到左值上：</p>
-
 <pre><code>void process_value(int&amp;&amp; i) { 
  std::cout &lt;&lt; &quot;LValue processed: &quot; &lt;&lt; i &lt;&lt; std::endl; 
 } 
@@ -154,13 +149,11 @@ int main() {
  int a = 0; 
  process_value(a); 
 }
-</code></pre>
-
-<p>编译错误:
-&gt; cannot bind rvalue reference of type ‘int&amp;&amp;’ to lvalue of type ‘int’</p>
-
+</code></pre><p>编译错误:</p>
+<blockquote>
+<p>cannot bind rvalue reference of type ‘int&amp;&amp;’ to lvalue of type ‘int’</p>
+</blockquote>
 <p>另外，如果临时对象通过一个接受右值的函数传递给另一个函数时，就会变成左值，因为这个临时对象在传递过程中，变成了命名对象。</p>
-
 <pre><code>void process_value(int&amp; i) { 
  std::cout &lt;&lt; &quot;LValue processed: &quot; &lt;&lt; i &lt;&lt; std::endl; 
 } 
@@ -179,33 +172,19 @@ int main() {
  process_value(1); 
  forward_value(2); 
 }
-</code></pre>
-
-<p>结果:</p>
-
+</code></pre><p>结果:</p>
 <pre><code>LValue processed: 0 
 RValue processed: 1 
 LValue processed: 2
-</code></pre>
-
-<p>虽然 2 这个立即数在函数 forward_value 接收时是右值，但到了 process_value 接收时，变成了左值。</p>
-
+</code></pre><p>虽然 2 这个立即数在函数 forward_value 接收时是右值，但到了 process_value 接收时，变成了左值。</p>
 <h2 id="转移语义定义">转移语义定义</h2>
-
 <p>右值引用是用来支持转移语义的。转移语义可以将资源 ( 堆，系统对象等 ) 从一个对象转移到另一个对象，这样能够减少不必要的临时对象的创建、拷贝以及销毁，能够大幅度提高 C++ 应用程序的性能。临时对象的维护 ( 创建和销毁 ) 对性能有严重影响。</p>
-
 <p>转移语义是和拷贝语义相对的，可以类比文件的剪切与拷贝，当我们将文件从一个目录拷贝到另一个目录时，速度比剪切慢很多。</p>
-
 <p>通过转移语义，临时对象中的资源能够转移其它的对象里。</p>
-
 <p>在现有的 C++ 机制中，我们可以定义拷贝构造函数和赋值函数。要实现转移语义，需要定义转移构造函数，还可以定义转移赋值操作符。对于右值的拷贝和赋值会调用转移构造函数和转移赋值操作符。<strong>如果转移构造函数和转移拷贝操作符没有定义，那么就遵循现有的机制，拷贝构造函数和赋值操作符会被调用。</strong></p>
-
 <p>普通的函数和操作符也可以利用右值引用操作符实现转移语义。</p>
-
 <h2 id="转移构造函数和转移赋值函数示例">转移构造函数和转移赋值函数示例</h2>
-
 <p>以一个简单的 string 类为示例，实现拷贝构造函数和拷贝赋值操作符。</p>
-
 <pre><code>#include &lt;iostream&gt;
 #include &lt;cstring&gt;
 #include &lt;vector&gt;
@@ -278,10 +257,7 @@ int main() {
  MyString d;
  d = fun2(b);
 }
-</code></pre>
-
-<p>开启fno-elide-constructors选项，编译运行后的结果:</p>
-
+</code></pre><p>开启fno-elide-constructors选项，编译运行后的结果:</p>
 <pre><code>1.----------------------------------
 Parameterless Constructor is called!
 2.----------------------------------
@@ -303,20 +279,14 @@ Copy Constructor is called! source: Fine
 In fun2
 Copy Constructor is called! source: Fine
 Copy Assignment is called! source: Fine
-</code></pre>
-
-<p>这个 string 类已经基本满足我们演示的需要。在 main 函数中，实现了调用拷贝构造函数的操作和拷贝赋值操作符的操作。MyString(“Hello”) 和 MyString(“World”) 都是临时对象，也就是右值。虽然它们是临时的，但程序仍然调用了拷贝构造和拷贝赋值，造成了没有意义的资源申请和释放的操作。如果能够直接使用临时对象已经申请的资源，既能节省资源，有能节省资源申请和释放的时间。这正是定义转移语义的目的。</p>
-
+</code></pre><p>这个 string 类已经基本满足我们演示的需要。在 main 函数中，实现了调用拷贝构造函数的操作和拷贝赋值操作符的操作。MyString(“Hello”) 和 MyString(“World”) 都是临时对象，也就是右值。虽然它们是临时的，但程序仍然调用了拷贝构造和拷贝赋值，造成了没有意义的资源申请和释放的操作。如果能够直接使用临时对象已经申请的资源，既能节省资源，有能节省资源申请和释放的时间。这正是定义转移语义的目的。</p>
 <p>另外，从输出可以看出，当没有转移构造器时，拷贝构造器分别在以下三种场景中被调用：</p>
-
 <ul>
 <li>当用类一个对象去初始化另一个对象时</li>
 <li>如果函数形参是类对象</li>
 <li>如果函数返回值是类对象，函数执行完成返回时调用</li>
 </ul>
-
 <p>接下来，我们先定义转移构造器</p>
-
 <pre><code>MyString(MyString&amp;&amp; str) { 
    std::cout &lt;&lt; &quot;Move Constructor is called! source: &quot; &lt;&lt; str._data &lt;&lt; std::endl; 
    _len = str._len; 
@@ -324,18 +294,13 @@ Copy Assignment is called! source: Fine
    str._len = 0; 
    str._data = NULL; 
 }
-</code></pre>
-
-<p>和拷贝构造函数类似，有几点需要注意：</p>
-
+</code></pre><p>和拷贝构造函数类似，有几点需要注意：</p>
 <ol>
 <li>参数（右值）的符号必须是右值引用符号，即“&amp;&amp;”。</li>
 <li>参数（右值）不可以是常量，因为我们需要修改右值。</li>
-<li>参数（右值）的资源链接和标记必须修改。否则，右值的析构函数就会释放资源。转移到新对象的资源也就无效了。<br /></li>
+<li>参数（右值）的资源链接和标记必须修改。否则，右值的析构函数就会释放资源。转移到新对象的资源也就无效了。</li>
 </ol>
-
 <p>现在我们定义转移赋值操作符</p>
-
 <pre><code>MyString&amp; operator=(MyString&amp;&amp; str) { 
    std::cout &lt;&lt; &quot;Move Assignment is called! source: &quot; &lt;&lt; str._data &lt;&lt; std::endl; 
    if (this != &amp;str) { 
@@ -346,10 +311,7 @@ Copy Assignment is called! source: Fine
    } 
    return *this; 
 }
-</code></pre>
-
-<p>结果:</p>
-
+</code></pre><p>结果:</p>
 <pre><code>1.----------------------------------
 Parameterless Constructor is called!
 2.----------------------------------
@@ -371,19 +333,12 @@ Copy Constructor is called! source: Fine
 In fun2
 Move Constructor is called! source: Fine
 Move Assignment is called! source: Fine
-</code></pre>
-
-<p>由此看出，编译器区分了左值和右值，对右值调用了转移构造函数和转移赋值操作符。节省了资源，提高了程序运行的效率。</p>
-
+</code></pre><p>由此看出，编译器区分了左值和右值，对右值调用了转移构造函数和转移赋值操作符。节省了资源，提高了程序运行的效率。</p>
 <p>有了右值引用和转移语义，我们在设计和实现类时，对于需要动态申请大量资源的类，应该设计转移构造函数和转移赋值函数，以提高应用程序的效率。</p>
-
 <h2 id="参考">参考</h2>
-
 <blockquote>
 <p><a href="https://www.ibm.com/developerworks/cn/aix/library/1307_lisl_c11/index.html">https://www.ibm.com/developerworks/cn/aix/library/1307_lisl_c11/index.html</a></p>
-
 <p><a href="https://blog.csdn.net/songguangfan/article/details/89049612">https://blog.csdn.net/songguangfan/article/details/89049612</a></p>
-
 <p><a href="https://blog.csdn.net/liujiayu2/article/details/49279419">https://blog.csdn.net/liujiayu2/article/details/49279419</a></p>
 </blockquote>
 </div>
@@ -402,6 +357,14 @@ Move Assignment is called! source: Fine
           
         </div>
       </div>
+      <script src="https://utteranc.es/client.js"
+          repo="zaorangyang/zaorangyang.github.io"
+          issue-term="pathname"
+          theme="github-light"
+          crossorigin="anonymous"
+          async>
+      </script>
+
       
       
     </div>
@@ -410,12 +373,12 @@ Move Assignment is called! source: Fine
 </div>
 <footer class="footer">
   <div class="powered_by">
-    <a href="https://zeuk.me">Designed by Zeuk,</a>
+    <a href="https://github.com/varkai/hugo-theme-zozo">Theme Zozo,</a>
     <a href="http://www.gohugo.io/">Proudly published with Hugo</a>
   </div>
 
   <div class="footer_slogan">
-    <span>事实唯真，目的本位</span>
+    <span></span>
   </div>
 </footer>
 

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
     <title>沉思录</title>
@@ -75,15 +75,6 @@
     </item>
     
     <item>
-      <title>人类误判心理学脑图</title>
-      <link>https://www.meditations.ink/posts/poor-charlie-almanack/</link>
-      <pubDate>Sun, 23 Jun 2019 16:47:07 +0800</pubDate>
-      
-      <guid>https://www.meditations.ink/posts/poor-charlie-almanack/</guid>
-      <description>人类误判心理学脑图 这些天将查理.芒格的穷查理宝典读完了，查理在书中总结了25条人类容易产生误判的倾向，这些倾向被查理统称为人类误判心理学。在我来看这些思维误区，其实在社会心理学的教材里都有涉及并且更为</description>
-    </item>
-    
-    <item>
       <title>[MySQL Release Notes] MySQL5.7.0翻译</title>
       <link>https://www.meditations.ink/posts/changes-in-mysql5.7.0-translate/</link>
       <pubDate>Mon, 17 Jun 2019 19:22:09 +0800</pubDate>
@@ -93,12 +84,12 @@
     </item>
     
     <item>
-      <title>代码大全摘抄</title>
-      <link>https://www.meditations.ink/posts/codecomplete/</link>
-      <pubDate>Tue, 21 May 2019 17:49:44 +0800</pubDate>
+      <title>关于我</title>
+      <link>https://www.meditations.ink/about/me/</link>
+      <pubDate>Sun, 23 Aug 1992 09:00:00 +0800</pubDate>
       
-      <guid>https://www.meditations.ink/posts/codecomplete/</guid>
-      <description>项目的初期、中期、末期都强调质量 在接触一个系统之前：你需要理解“这个系统应该做什么”，以及“它该如何做” 在我看来，软件的首要技术使命便是管理复杂度 从问题的领域着手，而不是从底层实现细节入手去编写程序，</description>
+      <guid>https://www.meditations.ink/about/me/</guid>
+      <description>大家好，我的名字是杨凿让。我是一名研发工程师，当前在滴滴基础架构部从事与database和数据存储相关的开发工作。我深爱我从事的领域，认为数字时代的database就像古代的纸和笔。 我平时爱读书，偏爱</description>
     </item>
     
   </channel>

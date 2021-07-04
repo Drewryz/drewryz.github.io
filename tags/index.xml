@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
     <title>Tags on 沉思录</title>
@@ -84,29 +84,11 @@
     </item>
     
     <item>
-      <title>阅读</title>
-      <link>https://www.meditations.ink/tags/%E9%98%85%E8%AF%BB/</link>
-      <pubDate>Sun, 23 Jun 2019 16:47:07 +0800</pubDate>
-      
-      <guid>https://www.meditations.ink/tags/%E9%98%85%E8%AF%BB/</guid>
-      <description></description>
-    </item>
-    
-    <item>
       <title>MySQL</title>
       <link>https://www.meditations.ink/tags/mysql/</link>
       <pubDate>Mon, 17 Jun 2019 19:22:09 +0800</pubDate>
       
       <guid>https://www.meditations.ink/tags/mysql/</guid>
-      <description></description>
-    </item>
-    
-    <item>
-      <title>软件工程</title>
-      <link>https://www.meditations.ink/tags/%E8%BD%AF%E4%BB%B6%E5%B7%A5%E7%A8%8B/</link>
-      <pubDate>Tue, 21 May 2019 17:49:44 +0800</pubDate>
-      
-      <guid>https://www.meditations.ink/tags/%E8%BD%AF%E4%BB%B6%E5%B7%A5%E7%A8%8B/</guid>
       <description></description>
     </item>
     

@@ -7,7 +7,7 @@
 
   
   <meta name="author"
-        content="YZR"/>
+        content="zaorangyang"/>
 
   
   <meta name="description" content="主要参考资料: https://github.com/mongodb/mongo/wiki/Build-Mongodb-From-Source 编译环境：Centos\Ubuntu 依赖 编译master分支，gcc版本需要在8.0以上，编译3.6，gcc版本需要在5.4.0以上 升级的gcc的路径不要装错，否则会出现一些错误，fi"/>
@@ -15,7 +15,7 @@
 
   
   
-  <meta name="keywords" content="Hugo, theme, zozo"/>
+  <meta name="keywords" content="数据库, 存储, 技术"/>
   
 
   
@@ -54,7 +54,7 @@
       </li>
       
       <li>
-        <a href="/about/">关于</a>
+        <a href="/about/me">关于</a>
       </li>
       
     </ul>
@@ -75,11 +75,26 @@
       </h1>
     </div>
     <div class="description">
-      <p class="sub_title">Follow me</p>
+      <p class="sub_title">
+
+
+							</p>
       <div class="my_socials">
         
         
-        <a href="https://github.com/Drewryz" title="github" target="_blank"><i class="remixicon-github-fill"></i></a>
+        <a href="https://github.com/zaorangyang" title="github" target="_blank"><i class="remixicon-github-fill"></i></a>
+        
+        
+        
+        <a href="mailto:zaorangy@gmail.com" title="mail" target="_blank"><i class="remixicon-mail-fill"></i></a>
+        
+        
+        
+        <a href="https://twitter.com/yu_yang_r" title="twitter" target="_blank"><i class="remixicon-twitter-fill"></i></a>
+        
+        
+        
+        <a href="https://www.zhihu.com/people/yangzaorang/posts" title="zhihu" target="_blank"><i class="remixicon-zhihu-fill"></i></a>
         
         
         <a href="https://www.meditations.ink/index.xml" type="application/rss+xml" title="rss" target="_blank"><i class="remixicon-rss-fill"></i></a>
@@ -95,119 +110,87 @@
           <h2><a href='/posts/mongo-compile/'>MongoDB源码编译</a></h2>
           <span class="date">2019.11.08</span>
         </div>
-        <div class="post_content markdown">
-
-<p>主要参考资料: <a href="https://github.com/mongodb/mongo/wiki/Build-Mongodb-From-Source">https://github.com/mongodb/mongo/wiki/Build-Mongodb-From-Source</a></p>
-
+        <div class="post_content markdown"><p>主要参考资料: <a href="https://github.com/mongodb/mongo/wiki/Build-Mongodb-From-Source">https://github.com/mongodb/mongo/wiki/Build-Mongodb-From-Source</a></p>
 <p>编译环境：Centos\Ubuntu</p>
-
 <h2 id="依赖">依赖</h2>
-
 <ul>
-<li><p>编译master分支，gcc版本需要在8.0以上，编译3.6，gcc版本需要在5.4.0以上</p>
-
+<li>
+<p>编译master分支，gcc版本需要在8.0以上，编译3.6，gcc版本需要在5.4.0以上</p>
 <ul>
-<li><p>升级的gcc的路径不要装错，否则会出现一些错误，fix很烦。--prefix=/usr</p></li>
-
-<li><p>因为GFW的原因，gcc依赖包安装巨慢，建议科学上网后手动下载</p></li>
-
-<li><p>编译gcc需要的时间过长，耐心等待...</p></li>
-
-<li><p>在选择gcc版本时，尽量保守一些，主要为了库向前兼容</p></li>
-</ul></li>
-
-<li><p>需要libcurl库以及头文件：</p>
-
+<li>
+<p>升级的gcc的路径不要装错，否则会出现一些错误，fix很烦。&ndash;prefix=/usr</p>
+</li>
+<li>
+<p>因为GFW的原因，gcc依赖包安装巨慢，建议科学上网后手动下载</p>
+</li>
+<li>
+<p>编译gcc需要的时间过长，耐心等待&hellip;</p>
+</li>
+<li>
+<p>在选择gcc版本时，尽量保守一些，主要为了库向前兼容</p>
+</li>
+</ul>
+</li>
+<li>
+<p>需要libcurl库以及头文件：</p>
 <ul>
 <li>Centos: yum install libcurl-devel \ apt install libcurl-dev</li>
-</ul></li>
-
-<li><p>需要python解释器，master需要的解释器版本为3.7，3.6需要的解释器版本为2.7</p></li>
-
-<li><p>mongo使用scons进行构建，因此还需要安装scons</p>
-
+</ul>
+</li>
+<li>
+<p>需要python解释器，master需要的解释器版本为3.7，3.6需要的解释器版本为2.7</p>
+</li>
+<li>
+<p>mongo使用scons进行构建，因此还需要安装scons</p>
 <ul>
 <li>yum install scons \ apt install scons</li>
-</ul></li>
-
-<li><p>安装glibc headers</p>
-
+</ul>
+</li>
+<li>
+<p>安装glibc headers</p>
 <ul>
 <li>yum install  glibc-devel \ apt install  glibc-devel</li>
-</ul></li>
-
-<li><p>安装SSL support</p>
-
+</ul>
+</li>
+<li>
+<p>安装SSL support</p>
 <ul>
 <li>yum install  openssl-devel \ apt install  libssl-dev</li>
-</ul></li>
 </ul>
-
+</li>
+</ul>
 <h2 id="安装pip-requirements">安装pip requirements</h2>
-
 <pre><code># macOS / Linux assuming python = python 2.7
 pip install --user -r etc/pip/dev-requirements.txt
-</code></pre>
-
-<p>注意，3.6版本应该用下面的命令</p>
-
+</code></pre><p>注意，3.6版本应该用下面的命令</p>
 <pre><code>pip install --user -r buildscripts/requirements.txt
-</code></pre>
-
-<p>执行上述命令时，应该在mongo代码仓的顶层</p>
-
+</code></pre><p>执行上述命令时，应该在mongo代码仓的顶层</p>
 <h2 id="使用scons构建">使用scons构建</h2>
-
 <p>构建时需要传给scons一个target</p>
-
 <p>编译mongod</p>
-
 <pre><code>buildscripts/scons.py mongod
-</code></pre>
-
-<p>编译mongod,mongo,mongos</p>
-
+</code></pre><p>编译mongod,mongo,mongos</p>
 <pre><code>buildscripts/scons.py mongod mongo mongos
-</code></pre>
-
-<p>编译mongo, mongod, mongos, C++ unit tests</p>
-
+</code></pre><p>编译mongo, mongod, mongos, C++ unit tests</p>
 <pre><code>buildscripts/scons.py all
-</code></pre>
-
-<p>用新版本的gcc编译比较3.6版本的mongo时，可能会有warn导致的error，编译时需要添加--disable-warnings-as-errors参数</p>
-
+</code></pre><p>用新版本的gcc编译比较3.6版本的mongo时，可能会有warn导致的error，编译时需要添加&ndash;disable-warnings-as-errors参数</p>
 <h2 id="debug">Debug</h2>
-
-<p>关键参数--release与--dbg</p>
-
+<p>关键参数&ndash;release与&ndash;dbg</p>
 <p>下面这个编译命令，dbg已经为off了，可以gdb还是可以调试，很奇怪</p>
-
 <pre><code>buildscripts/scons.py -j6 mongod --disable-warnings-as-errors --release=RELEASE --dbg=off
-</code></pre>
-
-<p>下面这个编译指令，出错。release=RELEASE与dbg=on不能同时存在</p>
-
+</code></pre><p>下面这个编译指令，出错。release=RELEASE与dbg=on不能同时存在</p>
 <pre><code>buildscripts/scons.py -j6 mongod --disable-warnings-as-errors --release=RELEASE --dbg=on
-</code></pre>
-
-<p>google一番，并没有搜到直接的解释，但是搜到了一个相关的问题， <a href="https://stackoverflow.com/questions/37367509/mongodb-v3-2-compiled-binaries-are-over-500-mb">https://stackoverflow.com/questions/37367509/mongodb-v3-2-compiled-binaries-are-over-500-mb</a></p>
-
+</code></pre><p>google一番，并没有搜到直接的解释，但是搜到了一个相关的问题， <a href="https://stackoverflow.com/questions/37367509/mongodb-v3-2-compiled-binaries-are-over-500-mb">https://stackoverflow.com/questions/37367509/mongodb-v3-2-compiled-binaries-are-over-500-mb</a></p>
 <p>大致猜测到，编译后的mongod并没有做strip，也就是说调试信息和符号信息默认是存在的。</p>
-
 <h2 id="test">Test</h2>
-
 <p>mongo包含以下三种主要测试：</p>
-
 <ul>
 <li>集成测试，javascript编写</li>
 <li>C++ 单测</li>
 <li>C++ dbtest, 其目的也是单测，但是更像集成测试，目前已经逐渐废弃</li>
 </ul>
-
 <p>如果对源码进行了改动，要对改动的部分进行测试。</p>
-
-<p>从单测出发阅读源码是一个好选择，但是目前很多源码没有对应的单测文件...</p>
+<p>从单测出发阅读源码是一个好选择，但是目前很多源码没有对应的单测文件&hellip;</p>
 </div>
         <div class="post_footer">
           
@@ -226,6 +209,14 @@ pip install --user -r etc/pip/dev-requirements.txt
           
         </div>
       </div>
+      <script src="https://utteranc.es/client.js"
+          repo="zaorangyang/zaorangyang.github.io"
+          issue-term="pathname"
+          theme="github-light"
+          crossorigin="anonymous"
+          async>
+      </script>
+
       
       
     </div>
@@ -234,12 +225,12 @@ pip install --user -r etc/pip/dev-requirements.txt
 </div>
 <footer class="footer">
   <div class="powered_by">
-    <a href="https://zeuk.me">Designed by Zeuk,</a>
+    <a href="https://github.com/varkai/hugo-theme-zozo">Theme Zozo,</a>
     <a href="http://www.gohugo.io/">Proudly published with Hugo</a>
   </div>
 
   <div class="footer_slogan">
-    <span>事实唯真，目的本位</span>
+    <span></span>
   </div>
 </footer>
 
