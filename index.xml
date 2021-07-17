@@ -21,6 +21,15 @@
     </item>
     
     <item>
+      <title>RocksDB LRUCache梳理</title>
+      <link>https://zaorangyang.github.io/posts/rocksdb-lrucache/</link>
+      <pubDate>Wed, 05 May 2021 19:14:10 +0800</pubDate>
+      
+      <guid>https://zaorangyang.github.io/posts/rocksdb-lrucache/</guid>
+      <description>Overview 整体说来，rocksdb对于LRUCache的实现还是比较简单的，和我们平时见到的LRUCache基本一致，核心数据结构包括一个hashtable，用于存放cache所管理的数据，另一个数据结构为一</description>
+    </item>
+    
+    <item>
       <title>RocksDB写流程梳理</title>
       <link>https://zaorangyang.github.io/posts/rocksdb-write-path/</link>
       <pubDate>Sun, 02 May 2021 18:34:33 +0800</pubDate>
