@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>论文阅读 on Zaorang&#39;s Blog</title>
+    <link>https://zaorangyang.github.io/tags/%E8%AE%BA%E6%96%87%E9%98%85%E8%AF%BB/</link>
+    <description>Recent content in 论文阅读 on Zaorang&#39;s Blog</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Thu, 06 May 2021 19:20:32 +0800</lastBuildDate>
+    
+	<atom:link href="https://zaorangyang.github.io/tags/%E8%AE%BA%E6%96%87%E9%98%85%E8%AF%BB/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>WiscKey论文阅读</title>
+      <link>https://zaorangyang.github.io/posts/wisckey-paper/</link>
+      <pubDate>Thu, 06 May 2021 19:20:32 +0800</pubDate>
+      
+      <guid>https://zaorangyang.github.io/posts/wisckey-paper/</guid>
+      <description>介绍 由于SSD的几个特性，导致当前的LSM设计不太合理： 随机读写的性能和顺序读写的性能差异在SSD下没有HDD下那么明显 SSD内部有大量的并行机制，LSM并没有好好利用 (为什么说没有好好利用) 写入次数</description>
+    </item>
+    
+  </channel>
+</rss>
