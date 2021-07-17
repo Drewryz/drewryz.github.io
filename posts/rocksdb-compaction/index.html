@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="zh-cn" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="author" content="zaorangyang" />
+	
+	
+	
+	<title>RocksDB Compaction源码分析 Zaorang&#39;s Blog</title>
+	
+    
+    
+    <meta name="description" content="前言 rocksdb有多种compaction策略，默认的compaction策略应该为leveled compaction，我们本次分析leveled compaction机制。本次分析主要涉及到几个问题" />
+    
+
+    
+    
+    <meta name="keywords" content="数据库, 存储, 技术" />
+    
+
+	
+    
+    <link rel="shortcut icon" href="https://zaorangyang.github.io/images/favicon.ico" />
+
+    <link rel="stylesheet" type="text/css" media="screen" href="https://zaorangyang.github.io/css/normalize.css" />
+    <link rel="stylesheet" type="text/css" media="screen" href="https://cdn.jsdelivr.net/npm/animate.css@4.1.0/animate.min.css" />
+    <link rel="stylesheet" type="text/css" media="screen" href="https://zaorangyang.github.io/css/zozo.css" />
+	<link rel="stylesheet" type="text/css" media="screen" href="https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css" />
+    <link rel="stylesheet" type="text/css" media="screen" href="https://zaorangyang.github.io/css/highlight.css" />
+
+    
+    
+</head>
+
+
+<body>
+    <div class="main animate__animated animate__fadeInDown">
+        <div class="nav_container animated fadeInDown">
+    <div class="site_nav" id="site_nav">
+        <ul>
+            
+            <li>
+                <a href="/">首页</a>
+            </li>
+            
+            <li>
+                <a href="/posts/">归档</a>
+            </li>
+            
+            <li>
+                <a href="/tags/">标签</a>
+            </li>
+            
+            <li>
+                <a href="/about/me">关于</a>
+            </li>
+            
+        </ul>
+    </div>
+    <div class="menu_icon">
+        <a id="menu_icon"><i class="ri-menu-line"></i></a>
+    </div>
+</div>
+        <div class="header animated fadeInDown">
+    <div class="site_title_container">
+        <div class="site_title">
+            <h1>
+                <a href="https://zaorangyang.github.io/">
+                    <span>Zaorang&#39;s Blog</span>
+                </a>
+            </h1>
+        </div>
+        <div class="description">
+            <p class="sub_title">
+
+
+							</p>
+            <div class="my_socials">
+                
+                
+                <a href="https://github.com/zaorangyang" title="github" target="_blank"><i class="ri-github-fill"></i></a>
+                
+                
+                
+                <a href="mailto:zaorangy@gmail.com" title="mail" target="_blank"><i class="ri-mail-fill"></i></a>
+                
+                
+                
+                <a href="https://twitter.com/yu_yang_r" title="twitter" target="_blank"><i class="ri-twitter-fill"></i></a>
+                
+                
+                
+                <a href="https://www.zhihu.com/people/yangzaorang/posts" title="zhihu" target="_blank"><i class="ri-zhihu-fill"></i></a>
+                
+                
+                <a href="https://zaorangyang.github.io/index.xml" type="application/rss+xml" title="rss" target="_blank"><i
+                        class="ri-rss-fill"></i></a>
+            </div>
+        </div>
+    </div>
+</div>
+        <div class="content">
+            <div class="post_page">
+                <div class="post animate__animated animate__fadeInDown">
+                    <div class="post_title post_detail_title">
+                        <h2><a href='/posts/rocksdb-compaction/'>RocksDB Compaction源码分析</a></h2>
+                        <span class="date">2021.05.06</span>
+                    </div>
+                    <div class="post_content markdown"><h2 id="前言">前言</h2>
+<p>rocksdb有多种compaction策略，默认的compaction策略应该为leveled compaction，我们本次分析leveled compaction机制。本次分析主要涉及到几个问题：</p>
+<ul>
+<li>compaction何时被触发</li>
+<li>compaction具体流程</li>
+<li>compaction如何与mvcc机制联动</li>
+</ul>
+<h2 id="前置知识">前置知识</h2>
+<ul>
+<li>一个库的SST文件有多个</li>
+<li>每个SST文件都属于某一层
+<img src="/rocksdb-compaction/Image.png" alt="ab34b5585326a49d84937d4ac7318775.png"></li>
+<li>除了第0层的SST文件，其余层的SST文件<strong>之间</strong>都是有序的
+<img src="/rocksdb-compaction/Image2.png" alt="88998384ca6af46ba60b022fcdac2b11.png"></li>
+<li>除了第0层以外，其余层的大小都是固定的。compaction的目标是将这些level的数据大小限制在阈值之下。level的大小通常呈指数级增长。
+<img src="/rocksdb-compaction/Image3.png" alt="6fe2f5dedec86ad8a2902d26f85bc9dd.png"></li>
+</ul>
+<h2 id="如何做compaction--宏观层面">如何做compaction&ndash;宏观层面</h2>
+<p>当L0层的文件数据达到level0_file_num_compaction_trigger，compaction会被触发。由于L0层的SST文件之间是无序的，所以在做compaction时，一般来说会将L0层的所有文件全部merge到L1层。
+<img src="/rocksdb-compaction/Image4.png" alt="539219e61d367926f81e6f0657f449fb.png">
+当做完L0到L1层的compaction后，L1层的SST文件大小可能会超过配置的阈值，此时需要在L1层挑选一个SST文件，merge到L2层。<strong>至于挑选哪个文件，rocksdb有具体的策略。</strong>
+<img src="/rocksdb-compaction/Image5.png" alt="da235ff081caf31324309a4893baf830.png">
+接下来L2,L3,&hellip;层的SST文件大小也可能会超过配置的阈值，那么重复上面的过程即可。
+rocksdb支持多个compaction任务并发进行。
+<img src="/rocksdb-compaction/Image6.png" alt="7a65fd2d9cc76e8b7bcf5c48d7214f05.png">
+由于L0层的SST文件之间是无序的，所以L0层到L1层的compaction是无法直接并发的，这可能会成为瓶颈。rocksdb提供了一个参数，该参数可以使得L0层到L1层的compaction被分割成sub-compact, sub-compact之间是可以并发的。
+<img src="/rocksdb-compaction/Image7.png" alt="7607cec98d43822568d32721a4f602d6.png"></p>
+<h3 id="compaction-picking">Compaction Picking</h3>
+<p>所谓Compaction Picking主要涉及到两个问题：</p>
+<ul>
+<li>当多个level的SST文件总size都达到了阈值，那应该优先对哪个level做compact</li>
+<li>对于一个level内的多个SST文件，应该优先选择哪个文件做compact</li>
+</ul>
+<h4 id="挑选哪个level">挑选哪个level</h4>
+<p>为了确定不同level做compact的优先级，rocksdb给每个level赋予一个score,得分越高的level，其做compact的优先级更高。每层的score计算方式如下：</p>
+<ul>
+<li>对于非L0层的层，score的计算方式为，level总SST的大小除以该level对应的要做compact的阈值</li>
+<li>对于L0层的score,计算方式为max(L0层所有文件的个数/level0_file_num_compaction_trigger, L0层所有SST文件总大小-max_bytes_for_level_base)</li>
+</ul>
+<h4 id="挑选哪些sst文件">挑选哪些SST文件</h4>
+<ol>
+<li>挑选得分最高的level，记为Lb作为将要做compact的level</li>
+<li>compact后输出的SST文件应该位于Lb+1, 记为Lo</li>
+<li>在Lb层找到优先级最高的SST文件(一般是先选取文件size最大的SST文件)，该文件将要被compact，如果该文件已经在一个compact_job中了，或者该文件的KeyRange对应Lo层对应的文件已经在一个compact_job中，则跳过该文件，选择下一个优先级最高的文件，重复当前步骤，直到直到一个候选文件，将文件加入compaction <strong>inputs集合</strong>中。</li>
+<li>扩展<strong>inputs集合</strong>，直到<strong>inputs集合</strong>中的所有SST文件，有一个清晰的(clean out)边界。举个例子，假设Lb层有5个SST文件, 如下所示。如果<strong>inputs集合</strong>最开始包含的文件是f3, 因为f3的a4与f2的a4重合，f3的a6与f4的a6重合，所以还需要将f2和f4加入<strong>inputs集合</strong>。这么做的原因应该是为了便于读同一个key的多版本数据。</li>
+</ol>
+<pre><code>f1[a1 a2] f2[a3 a4] f3[a4 a6] f4[a6 a7] f5[a8 a9]
+</code></pre><ol start="5">
+<li>检查<strong>inputs集合</strong>中的SST文件是否有与正在做compact的文件重合，如果有重合且并且<strong>manual compaction不可用</strong>，则abort当前的compaction pick job。</li>
+<li>在Lo层找到与<strong>inputs集合</strong>中所有SST文件有交错的SST文件，然后按照步骤4扩展，如果这些文件有正在做compact的，则abort当前的compaction pick job，否则，将这些文件放入<strong>output_level_inputs集合</strong>。</li>
+<li>一个可选的优化做法就是，如果扩展<strong>inputs集合</strong>中的SST文件，但是不会导致<strong>output_level_inputs集合</strong>的SST文件增加，那么就扩展之，举个例子, 如果当前f2在<strong>inputs集合</strong>中，f6在<strong>output_level_inputs集合</strong>中，那么可以将f3也加入<strong>inputs集合</strong>中，因为将f3加入<strong>inputs集合</strong>中，我们并不会损失什么。</li>
+</ol>
+<pre><code>Lb: f1[B E] f2[F G] f3[H I] f4[J M]
+Lo: f5[A C] f6[D K] f7[L O]
+</code></pre><ol start="8">
+<li><strong>inputs集合</strong>中的SST文件和<strong>output_level_inputs集合</strong>中的SST文件，就是此次compact的candidate文件。</li>
+</ol>
+<h2 id="如何做compaction--代码层面">如何做compaction&ndash;代码层面</h2>
+<p>主要调用栈：</p>
+<ol>
+<li>BGWorkCompaction</li>
+<li>BackgroundCallCompaction
+BackgroundCallCompaction函数调用BackgroundCompaction，完成compaction主流程，另外，还会调用FindObsoleteFiles，清理过期文件。</li>
+<li>BackgroundCompaction
+BackgroundCompaction这个函数比较长，我们主要分析主干，细枝末节先放弃。主流程：
+<ul>
+<li>从全局队列，compaction_queue_，获取等待做compact的cf</li>
+<li>调用PickCompaction，用于挑选需要做compaction的文件，具体的信息记录在Compaction对象中</li>
+<li>尽管当前的compact未开始执行，但是从一个level挑选一些SST文件做compact后，此时该level的score就发生了变化。这里，rocksdb会再次检测该cfd是否需要做compact，如果需要的话，那么将该cfd再次加入全局compact队列</li>
+<li>当挑选完参与本次compact的SST文件列表后，接下来构造一个CompactionJob对象，整个compact的核心逻辑都封装在这个对象中</li>
+<li>调用ompaction_job.Run()，执行主要的compact动作</li>
+<li>调用compaction_job.Install， <strong>猜测和全局的Version管理相关，待核实</strong>。</li>
+<li>做一些善后工作，return</li>
+</ul>
+</li>
+<li>CompactionJob::Run
+这个函数的主要工作是调用ProcessKeyValueCompaction，ProcessKeyValueCompaction执行完，compact的大部分工作就完成了。另外有一点需要关注的地方，就是执行完ProcessKeyValueCompaction函数后，会生成一些output SST，对于这些SST的信息，该函数将其保存到一个hashmap中(TablePropertiesCollection)。</li>
+<li>ProcessKeyValueCompaction
+这个函数很长，而且涉及到的模块很快，所以比较复杂，我们还是一样只分析主干:
+<ul>
+<li>调用MakeInputIterator构建一个迭代器记为input，这个迭代器可以迭代所有参与compaction的SST文件</li>
+<li>如果用户指定了compaction filter，那么则初始化，否则compaction filter为null</li>
+<li>如果用户指定了merge operator，那么则初始化，否则可以忽略</li>
+<li>调整input迭代器定位到起始位置</li>
+<li>构建CompactionIterator，CompactionIterator又是一个大杂烩，包括了input迭代器，当前系统的快照信息，compaction filter，merge filter等一些成员。ompaction的过程就是迭代input sst文件，并对kv对做处理的过程，CompactionIterator就封装了处理逻辑</li>
+<li>迭代CompactionIterator，对于每一个CompactionIterator的输出，都将其写入output文件中，迭代的过程中，如果output文件写满，则切换文件。</li>
+</ul>
+</li>
+</ol>
+<h3 id="compact中的iterator">compact中的Iterator</h3>
+<p>一般来说，Compaction的Input涉及两层数据的合并，对于涉及到的每一层数据：如果是level-0，对level-0的每一个sstable文件建立一个Iterator， 因为Level-0的sstable之间存在Overlap。如果不是level-0，对该 level 的所有sstable文件建立一个TwoLevelIterator。
+所谓TwoLevelIterator指的是，我们遍历的数据有两层，第二层依赖于第一层。举个例子：对于同一个level的一个SST集合来说，如果我们要遍历这个SST集合中的所有kv对，那么需要首先确定要遍历哪个SST文件，然后要确定要遍历SST文件的哪个位置。对于TwoLevelIterator：</p>
+<pre><code>first_level_iter_: 表示该层所涉及到Compaction 的 file 元信息组成的 LevelFileNumIterator
+second_level_iter_: 表示当前所使用的数据 Block 构成的 Iterator
+</code></pre><p>它们的组合将这一层所有sstable 的数据连接起来，构成了一个整体的Iterator。这样，对于Compaction所用到的所有sstable文件，都建立了与之相关联的Iterator。最后将建立的所有Iterator合并，构成一个整体性的MergeIterator。这就是VersionSet::MakeInputIterator的操作过程。</p>
+<h4 id="levelfilenumiterator">LevelFileNumIterator</h4>
+<p>LevelFileNumIterator的内容为该层所有文件的元信息：LevelFilesBrief，以下是 LevelFileNumIterator 中两个主要的函数实现：</p>
+<pre><code>Slice key() const override
+{
+    assert(Valid());
+    return flevel_-&gt;files[index_].largest_key;
+}
+Slice value() const override
+{
+    assert(Valid());
+    auto file_meta = flevel_-&gt;files[index_];
+    current_value_ = file_meta.fd;
+    return Slice(reinterpret_cast&lt;const char*&gt;(t_value_), sizeof(FileDescriptor));
+}
+</code></pre><p>key():表示的是当前index的sstable的largest_key。
+value():表示的是是个由当前sstable文件的FileDescriptor信息，即包含其file number 和 file size。</p>
+<h4 id="twoleveliterator">TwoLevelIterator</h4>
+<p>TwoLevelIterator为一个两层结构的迭代器，其类成员包括两个IteratorWrapper：</p>
+<pre><code>IteratorWrapper first_level_iter_;
+IteratorWrapper second_level_iter_;
+</code></pre><p>IteratorWrapper是对InternalIterator封装的，引入这个类的原因是为了缓冲key，避免多次调用虚函数带来的开销。上述的LevelFileNumIterator即为此处的first_level_iter，当TwoLevelIterator初始化时，它会调用自身的InitDataBlock()函数。InitDataBlock函数根据自身的state和first_level_iter_.value()，构建第二层Iterator。
+整体上来看，这个TwoLevelIterator内容为这一层的所有文件数据，第一层Iterator：表示这一层所有文件的元信息；第二层Iterator：表示当前文件的数据信息。以下是TwoLevelIterator的Key-Value成员函数的代码，可以看出，它的Key-Value即表示当前sstable Iterator的当前Key-Value：</p>
+<pre><code>virtual Slice key() const override
+{
+    assert(Valid());
+    return second_level_iter_.key();
+}
+virtual Slice value() const override
+{
+    assert(Valid());
+    return second_level_iter_.value();
+}
+</code></pre><p>Next() 操作定位下一个Key-Value，如果当前Block已结束，second_level_iter_移动到下一个Block</p>
+<pre><code>void TwoLevelIterator::Next()
+{
+    assert(Valid());
+    second_level_iter_.Next();
+    SkipEmptyDataBlocksForward();
+}
+void TwoLevelIterator::SkipEmptyDataBlocksForward()
+{
+    while (second_level_iter_.iter() == nullptr
+            || (!second_level_iter_.Valid() &amp;&amp; !second_level_iter_.status().IsIncomplete()))
+    {
+        // Move to next block
+        if (!first_level_iter_.Valid())
+        {
+            SetSecondLevelIterator(nullptr);
+            return;
+        }
+        first_level_iter_.Next();
+        InitDataBlock();
+        if (second_level_iter_.iter() != nullptr)
+        {
+            second_level_iter_.SeekToFirst();
+        }
+    }
+}
+</code></pre><h4 id="mergingiterator">MergingIterator</h4>
+<p>MergingIterator用于将参与本次compaction涉及到的所有子迭代器聚合在一起，构建成一个MergingIterator。所谓的子迭代器指的参与此次compaction的所有L0层的每个SST文件的迭代器，以及参与此次compaction的非L0层的每一层的迭代器，至于为什么这么构建前文已经有论述。</p>
+<pre><code>IteratorWrapper* current_;
+autovector&lt;IteratorWrapper, kNumIterReserve&gt; children_;
+MergerMinIterHeap minHeap_;
+</code></pre><p>从结构上来说，一个MergingIterator由一个或多个childr组成，每一个child也是一个Iterator，所有的子迭代器通过堆的数据结构组织，MergingIterator维护了一个小顶堆，用于持续向外输出当前剩余数据的最小值，其实维护小顶堆的过程就是解决多数组topk问题的过程。
+MergingIterator的Key和Value成员函数均返回的是当前子迭代器current_的Key与Value：</p>
+<pre><code>virtual Slice key() const override
+{
+    assert(Valid());
+    return current_-&gt;key();
+}
+virtual Slice value() const override
+{
+    assert(Valid());
+    return current_-&gt;value();
+}
+</code></pre><p>current_ 默认为堆顶的child，即表示数值最小的child。在Compaction过程中，这些children表示的是某一个sstable（level-0层）或者某一层sstable数据。
+对于MergingIterator的迭代过程，以下是Next() 成员函数的部分节选：</p>
+<pre><code>virtual void Next() override
+{
+    current_-&gt;Next();
+    if (current_-&gt;Valid())
+    {
+        minHeap_.replace_top(current_);
+    }
+    else
+    {
+        minHeap_.pop();
+    }
+    current_ = CurrentForward();
+}
+</code></pre><p>MergingIterator的Next一般来说表示的就是current_的Next，但是当current_迭代结束之后，就会取下一个child作为current。
+从Compaction的角度来说，也就是MergingIterator的Next操作也就是涉及到所有sstable数据中，Key从小到大顺序遍历的过程（direction=kForward）</p>
+<h4 id="compactioniterator">CompactionIterator</h4>
+<p>其实compaction的过程就是迭代input sst文件，并对kv对做处理的过程，CompactionIterator就封装了处理逻辑，其主要数据成员包括：</p>
+<pre><code>InternalIterator* input_;
+MergeHelper* merge_helper_;
+std::vector&lt;SequenceNumber&gt;* snapshots_;
+const CompactionFilter* compaction_filter_;
+</code></pre><p>input_用于遍历所有参与这次compaction的SST文件。
+merge_helper_封装了用户定义的merge operator，用于在迭代SST文件时处理merge操作。
+snapshots_记录了此次compaction时当前系统存在的snapshot，因为一个key在SST中可能存在多个版本，根据snapshots_可以确定哪些版本的值已经不被用户可见并且可以丢弃了。举个例子，对于下面的kv对序列，假设系统存在两个snapshot，key1-v2这个数据，无论如何也不会被用户读到了，所以compaction时就可以丢弃掉。
+<img src="/rocksdb-compaction/rocksdb-compaction.png" alt="4f5d6b2cdaaa3562ace908a982ab4ba7.png">
+compaction_filter_记录了用户定义的compaction filter，输出数据时会被调用。</p>
+<p>CompactionIterator有几个关键函数：</p>
+<ul>
+<li>NextFromInput是compaction iterator关键函数。该函数读取input_迭代器当前指向的key和value，然后根据该key是否满足某些条件，做出一些动作，比如当前指向的key是否和上一个key相同，如果相同则保留当前版本(高版本)的数据。比如当前指向的key的类型为kTypeSingleDeletion或者为kTypeDeletion或者为kTypeMerge，都会根据相应的操作符语义做出一些处理。</li>
+<li>Next函数用于获取下一个可以输出的key和value，所谓可以输出指的是key和value可以写入output SST文件中。Next函数的整个逻辑比较简单：</li>
+</ul>
+<pre><code>Next() {
+   input_-&gt;Next();
+   NextFromInput();
+}
+</code></pre><h2 id="配置参数">配置参数</h2>
+<ul>
+<li>
+<p>level0_file_num_compaction_trigger: 当L0的个数超过这个值时，会触发compaction</p>
+</li>
+<li>
+<p>max_bytes_for_level_base: L1的SST文件总大大小阈值，L2层SST文件总大小阈值为max_bytes_for_level_base*ratio, L3层，L4层，以此类推</p>
+</li>
+<li>
+<p>target_file_size_multiplier: 下一层单个SST文件是上一层单个SST文件大小的几倍</p>
+</li>
+<li>
+<p>max_bytes_for_level_multipliers: 下一层SST文件的总大小最大值是当前层SST文件总大小最大值的几倍</p>
+</li>
+<li>
+<p>num_levels: LSM树最多有多少层</p>
+</li>
+<li>
+<p>target_file_size_base: 是L1层每个SST文件的大小，默认是64MB</p>
+</li>
+</ul>
+<h2 id="资料">资料</h2>
+<p><a href="https://github.com/facebook/rocksdb/wiki/Leveled-Compaction">https://github.com/facebook/rocksdb/wiki/Leveled-Compaction</a>
+<a href="https://github.com/facebook/rocksdb/wiki/Choose-Level-Compaction-Files">https://github.com/facebook/rocksdb/wiki/Choose-Level-Compaction-Files</a>
+<a href="https://rocksdb.org/blog/2016/01/29/compaction_pri.html">https://rocksdb.org/blog/2016/01/29/compaction_pri.html</a>
+<a href="https://www.bbsmax.com/A/QW5Yxg83Jm/">https://www.bbsmax.com/A/QW5Yxg83Jm/</a>
+<a href="https://blog.csdn.net/caoshangpa/article/details/79046942">https://blog.csdn.net/caoshangpa/article/details/79046942</a></p>
+</div>
+                    <div class="post_footer">
+                        
+                    </div>
+                </div>
+                
+                
+                <div class="doc_comments"></div>
+                
+            </div>
+        </div>
+      </div>
+      <script src="https://utteranc.es/client.js"
+          repo="zaorangyang/zaorangyang.github.io"
+          issue-term="pathname"
+          theme="github-light"
+          crossorigin="anonymous"
+          async>
+      </script>
+
+      
+      
+    </div>
+    <a id="back_to_top" href="#" class="back_to_top"><i class="ri-arrow-up-s-line"></i></a>
+    <footer class="footer">
+    <div class="powered_by">
+        <a href="https://github.com/varkai/hugo-theme-zozo">Theme Zozo,</a>
+        <a href="http://www.gohugo.io/">Published with Hugo</a>
+    </div>
+
+    <div class="footer_slogan">
+        <span></span>
+    </div>
+</footer>
+
+    <script src="https://zaorangyang.github.io/js/jquery-3.5.1.min.js"></script>
+<link href="https://zaorangyang.github.io/css/fancybox.min.css" rel="stylesheet">
+<script src="https://zaorangyang.github.io/js/fancybox.min.js"></script>
+<script src="https://zaorangyang.github.io/js/zozo.js"></script>
+
+
+<script type="text/javascript" async
+    src="https://cdn.bootcss.com/mathjax/2.7.5/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+        MathJax.Hub.Config({
+            tex2jax: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\[\[', '\]\]']],
+                processEscapes: true,
+                processEnvironments: true,
+                skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+                TeX: {
+                    equationNumbers: { autoNumber: "AMS" },
+                    extensions: ["AMSmath.js", "AMSsymbols.js"]
+                }
+            }
+        });
+
+        MathJax.Hub.Queue(function () {
+            
+            
+            
+            var all = MathJax.Hub.getAllJax(), i;
+            for (i = 0; i < all.length; i += 1) {
+                all[i].SourceElement().parentNode.className += ' has-jax';
+            }
+        });
+    </script>
+
+<style>
+    code.has-jax {
+        font: inherit;
+        font-size: 100%;
+        background: inherit;
+        border: inherit;
+        color: #515151;
+    }
+</style>
+
+
+
+</body>
+
+</html>
