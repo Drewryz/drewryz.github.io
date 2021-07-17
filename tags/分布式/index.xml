@@ -6,10 +6,19 @@
     <description>Recent content in 分布式 on Zaorang&#39;s Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Mon, 21 Oct 2019 08:11:04 +0800</lastBuildDate>
+    <lastBuildDate>Sun, 06 Jun 2021 19:20:32 +0800</lastBuildDate>
     
 	<atom:link href="https://zaorangyang.github.io/tags/%E5%88%86%E5%B8%83%E5%BC%8F/index.xml" rel="self" type="application/rss+xml" />
     
+    
+    <item>
+      <title>浅谈Raft配置变更(成员变更)策略</title>
+      <link>https://zaorangyang.github.io/posts/raft-member-change/</link>
+      <pubDate>Sun, 06 Jun 2021 19:20:32 +0800</pubDate>
+      
+      <guid>https://zaorangyang.github.io/posts/raft-member-change/</guid>
+      <description>前言 本文参考的文献为: CONSENSUS-BRIDGING THEORY AND PRACTICE。这里所说的配置，是一个raft集群的拓扑。配置变更指的是从当前集群中增加一部分节点或者删除一部分节点。在真实的生产环境中，因为各种原因，节点的上线/下线是</description>
+    </item>
     
     <item>
       <title>Raft论文阅读：Raft Basic</title>

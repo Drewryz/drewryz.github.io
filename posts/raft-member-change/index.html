@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="zh-cn" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="author" content="zaorangyang" />
+	
+	
+	
+	<title>浅谈Raft配置变更(成员变更)策略 Zaorang&#39;s Blog</title>
+	
+    
+    
+    <meta name="description" content="前言 本文参考的文献为: CONSENSUS-BRIDGING THEORY AND PRACTICE。这里所说的配置，是一个raft集群的拓扑。配置变更指的是从当前集群中增加一部分节点或者删除一部分节点。在真实的生产环境中，因为各种原因，节点的上线/下线是" />
+    
+
+    
+    
+    <meta name="keywords" content="数据库, 存储, 技术" />
+    
+
+	
+    
+    <link rel="shortcut icon" href="https://zaorangyang.github.io/images/favicon.ico" />
+
+    <link rel="stylesheet" type="text/css" media="screen" href="https://zaorangyang.github.io/css/normalize.css" />
+    <link rel="stylesheet" type="text/css" media="screen" href="https://cdn.jsdelivr.net/npm/animate.css@4.1.0/animate.min.css" />
+    <link rel="stylesheet" type="text/css" media="screen" href="https://zaorangyang.github.io/css/zozo.css" />
+	<link rel="stylesheet" type="text/css" media="screen" href="https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css" />
+    <link rel="stylesheet" type="text/css" media="screen" href="https://zaorangyang.github.io/css/highlight.css" />
+
+    
+    
+</head>
+
+
+<body>
+    <div class="main animate__animated animate__fadeInDown">
+        <div class="nav_container animated fadeInDown">
+    <div class="site_nav" id="site_nav">
+        <ul>
+            
+            <li>
+                <a href="/">首页</a>
+            </li>
+            
+            <li>
+                <a href="/posts/">归档</a>
+            </li>
+            
+            <li>
+                <a href="/tags/">标签</a>
+            </li>
+            
+            <li>
+                <a href="/about/me">关于</a>
+            </li>
+            
+        </ul>
+    </div>
+    <div class="menu_icon">
+        <a id="menu_icon"><i class="ri-menu-line"></i></a>
+    </div>
+</div>
+        <div class="header animated fadeInDown">
+    <div class="site_title_container">
+        <div class="site_title">
+            <h1>
+                <a href="https://zaorangyang.github.io/">
+                    <span>Zaorang&#39;s Blog</span>
+                </a>
+            </h1>
+        </div>
+        <div class="description">
+            <p class="sub_title">
+
+
+							</p>
+            <div class="my_socials">
+                
+                
+                <a href="https://github.com/zaorangyang" title="github" target="_blank"><i class="ri-github-fill"></i></a>
+                
+                
+                
+                <a href="mailto:zaorangy@gmail.com" title="mail" target="_blank"><i class="ri-mail-fill"></i></a>
+                
+                
+                
+                <a href="https://twitter.com/yu_yang_r" title="twitter" target="_blank"><i class="ri-twitter-fill"></i></a>
+                
+                
+                
+                <a href="https://www.zhihu.com/people/yangzaorang/posts" title="zhihu" target="_blank"><i class="ri-zhihu-fill"></i></a>
+                
+                
+                <a href="https://zaorangyang.github.io/index.xml" type="application/rss+xml" title="rss" target="_blank"><i
+                        class="ri-rss-fill"></i></a>
+            </div>
+        </div>
+    </div>
+</div>
+        <div class="content">
+            <div class="post_page">
+                <div class="post animate__animated animate__fadeInDown">
+                    <div class="post_title post_detail_title">
+                        <h2><a href='/posts/raft-member-change/'>浅谈Raft配置变更(成员变更)策略</a></h2>
+                        <span class="date">2021.06.06</span>
+                    </div>
+                    <div class="post_content markdown"><h4 id="前言">前言</h4>
+<p>本文参考的文献为: CONSENSUS-BRIDGING THEORY AND PRACTICE。这里所说的配置，是一个raft集群的拓扑。配置变更指的是从当前集群中增加一部分节点或者删除一部分节点。在真实的生产环境中，因为各种原因，节点的上线/下线是非常常见的场景，因此如何执行配置变更对一个共识算法来说还是非常重要的。</p>
+<p>对于配置变更来说，最简单暴力的方法就是直接整个集群停机，然后改配置文件。但这是不可能用在生成环境中的，我们的问题是如何执行hot-配置变更。
+论文引出了两个新的RPC，用于执行配置变更。
+<img src="/raft-memeber-change/ScreenClip.png" alt="4cb5d8295f54c050ac8bb36fe53af5d0.png"></p>
+<h4 id="raft的做法">Raft的做法</h4>
+<p>如果不加限制，直接往一个集群中增加或者删除一批节点，那可能会选举出两个leader出来，这破坏了raft的安全性。
+为了更加简单，Raft的配置变更，一次只能操作一个节点的上线/下线。
+论文接下来几章先描述单节点的配置变更策略，然后4.3给出raft完整的配置变更策略，完整的配置变更策略相对复杂。
+集群的配置信息也是一条日志被复制和存储。也就是说，如果你要执行配置变更，那就向leader发一条operation，然后leader将对应的operation复制到整个集群。所以，一个集群的配置变更大体上就和普通操作一样。但是这其中还有一些特别的细节需要额外处理。
+当leader在当前的配置下(C-old)接收到添加或者删除节点的请求，leader会在C-old的基础上，生成一个新的配置C-new, 并将新配置作为一个log Entry append到自身的log中，然后复制到其他节点。新的配置只要被其他节点append到自身的log中，<strong>节点不等待配置变更日志提交就立刻执行配置变更操作。</strong> <strong>注意C-new Entry被复制到属于C-new集合的节点中，此时判断C-new Entry是否提交，要通过集群新拓扑的节点个数来计算。</strong>
+当C-new Entry这个日志被提交后，那么这次配置变更就完成了。此时，leader知道位于C-new集合的多数节点已经已经<strong>adopted</strong> C-new。举个例子，假设当前集群的节点个数为3个(Node1,Node2,Node3), 其中Node1是leader节点。如果要执行配置变更&ndash;增加一个节点Node4。整个流程是这样的，用户向Node1发送执行配置变更的消息，然后Node1向集群中的节点(包括新增的Node4节点)开始复制C-new Entry。因为C-new的节点个数为4，所以当前集群的quorum为3,也就是日志被三个节点接收到才能提交。假设此时Node1,Node2,Node3接收到了新的日志，接着leader将C-new提交，此时配置变更就结束了。即使集群中的节点来没有来得及执行C-new Entry，或者集群中有节点挂掉，那也没有问题，因为raft保证已经提交的日志不会被覆写。</p>
+<p><img src="/raft-memeber-change/raft%E5%A4%A7%E8%AE%BA%E6%96%87-Page-2.png" alt="263ea8fd88ce03e6bcfc28b3fcf49aea.png"></p>
+<p><strong>如果是按照C-old的quorum来计算会发生什么？</strong> 还是按照上图的例子，假设按照C-old的quorum来判断一个配置变更的Entry是否提交，如果Node1将配置信息复制到了Node2，然后将配置信息提交，之后Node1挂掉，假设Node3成为新的Leader，它可能会将Node2节点的配置信息覆写掉。这违背了Raft已提交日志不能覆写的原则。</p>
+<h4 id="成员变更期间集群可用性">成员变更期间集群可用性</h4>
+<p>一些成员变更场景会对集群的可用性造成影响：</p>
+<ul>
+<li>将log为空的节点加入集群可能会导致整个集群长时间无法响应用户的请求</li>
+<li>将当前leader踢出集群</li>
+<li>被踢出集群的节点会扰乱集群的正常运转</li>
+</ul>
+<p>Raft采用了附加的策略来消除这些影响。</p>
+<h5 id="将log为空的节点加入集群">将log为空的节点加入集群</h5>
+<p>将log为空的节点加入集群可能会导致整个集群长时间无法响应用户的请求。举个例子，3个节点的集群，添加一个log为空的节点。配置变更完成后，新加入的节点会去追集群中的日志进度，如果这个过程中有节点挂掉，尽管集群还有三个节点存活能保证quorum，但是因为新加入的节点日志进度远远落后于其他两个节点的日志进度，导致用户新的写操作难以提交，此时集群已经失去了可用性。
+<img src="/raft-memeber-change/Image.png" alt="90c3deb019eb340b9503a4dee68414e7.png"></p>
+<p><strong>解决方法:</strong> 在配置变更<strong>生效以前</strong>，让新加入的节点不具有投票权限，而且不参与quorum的计数，leader仅仅是将数据复制到新加入的节点。当新加入的节点的日志进度将要追上集群的日志进度时，再执行配置变更。</p>
+<h5 id="将当前leader踢出集群">将当前leader踢出集群</h5>
+<p>对于将当前leader踢出集群的配置变更场景，只有配置变更的日志C-new提交以后，被踢出集群的leader才能卸任。如果被踢出集群的leader提前卸任，该节点还有可能被再次选举为leader。举个例子，对于以下具有4个节点的Raft集群，该集群当前的leader为Node1。假设我们执行配置变更将Node1踢出集群。Node1首先接收到用户的配置变更请求C-new,它会将C-new复制到集群中的所有节点，<strong>注意此时Node1的选举超时的时钟不能停止</strong>，原因在于Node1拥有最新的日志信息，如果集群的网络发生闪断，Node1必须要被选举为leader，最新的日志才不会丢失。如果Node1不等待C-new日志提交就提前卸任，因为它的选举超时时钟没有停止，所以它仍有被选举为leader的可能，这会影响集群往前推进的速度。</p>
+<p><img src="/raft-memeber-change/raft%E5%A4%A7%E8%AE%BA%E6%96%87-Page-3.png" alt="79b62d452297b0cb5c239e8cf4b97e48.png"></p>
+<p>对于上面这个例子，有几点需要注意：</p>
+<ol>
+<li>Node1在复制C-new的过程中，判断C-new何时被提交在计算quorum时不能包括Node1自身。比如，如果Node1将日志复制到Node2就认为C-new已被提交，然后卸任并认为配置变更完成，此时如果Node2挂掉了，三个节点的集群挂掉1个节点，理论上集群不受影响，但是这种情况了集群就不用了，所以在判断C-new何时被提交在计算quorum时不能包括Node1自身。</li>
+<li>Node1在复制C-new的过程中，如果发生网络问题，Node1发起选举并计算quorum时，同样不能包括自身。假设Node1将C-new复制给其他三个节点后，集群网络发生问题，此时集群所有节点发起选举，如果Node1只接收到Node2的选票认为自己是leader，并且Node3收到Node4的选票也认为自己是leader，那么集群同时存在两个leader，这发生了脑裂。</li>
+</ol>
+<h5 id="被踢出集群的节点">被踢出集群的节点</h5>
+<p>没有附加措施，被踢出集群的节点会扰乱集群的正常运转。因为当leader接收到配置的变更请求以后，就不再向被踢出集群的集群发送心跳包了，此时被踢出集群的节点并未感知自己已经被踢出集群，所以其会发起超时选举，又因为选举时，节点会自增自己的Term，当leader接收到投票请求后会成为follower，虽然最后因为被踢出集群的节点不具有最新的日志，不会成为leader，但是这扰乱了集群的正常工作。这个过程其实和被网络隔离的节点，在网络恢复后重新加入集群的过程是一样的。
+<img src="/raft-memeber-change/raft-prevote.png" alt="fd30cbe62a8e8876e53c3e994a183dce.png"></p>
+<p>预选举(PreVote)可以一定程度地解决这个问题。预选举的过程是这样的。一个follower节点选举超时成为candidate后，不会将自身的Term自增，而是先去询问集群中的其他节点自己的日志进展是否能让自己成为leader，如果是那么预选举成功，该节点自增Term，然后走正常的选举流程，否则预选举失败，该节点重新成为follower。
+但如果再做配置变更时，leader还没有来得及发送C-new日志，被踢出的节点选举超时，并发起选举，此时仅仅通过比较日志新旧的预选举已经不能解决这个问题了，入下图所示。
+<img src="/raft-memeber-change/Image2.png" alt="ac174e07af876745b66ea770472f8652.png">
+为了解决这个问题，raft更改了RequestVoteRPC的逻辑：当一个节点收到投票请求后，如果该请求的接收时机在leader将要发送的心跳包时间点之前，则拒绝投票。下图是一个raft集群followr节点行为随时间变化的示意图，一个follower在接收到leader的一个hearbeat后，会等待下一个heartbeat, 图中蓝色区域表示等待的时间，在follower等待leader下一个心跳包的时间内，任何其他节点发来的投票请求将会被拒绝。</p>
+<p><img src="/raft-memeber-change/raft%E5%A4%A7%E8%AE%BA%E6%96%87-Page-4.png" alt="e18c6554ef661147e31aeac1829aae84.png"></p>
+<h4 id="多节点成员变更">多节点成员变更</h4>
+<p>所谓多节点成员变更指的是一次变更多个节点。上面讨论的全部是单节点成员变更的流程，Raft同样有多节点变更策略，不过Raft的作者认为多节点变更在工程实践上的意义不大，原因在于任何一个多节点成员变更都可以通过多个单节点成员变更策略的组合实现。
+对于多节点成员变更场景，Raft首先切换到过渡配置，称为joint consensus。当过渡配置提交后，整个系统再转入到C-new配置，并将C-new配置提交，之后成员变更操作就完成了。<strong>所以过渡配置到底是啥东西呢：</strong></p>
+<ul>
+<li>如果集群处于过渡配置状态，那么log entry会被复制到C-old和C-new包含的所有节点</li>
+<li>如果集群处于过渡配置状态，属于C-old或者C-new的节点都可以成为leader</li>
+<li><strong>如果集群属于过渡配置状态，判断一条日志是否提交或者请求选举在计算quorum的时候既要满足C-old的majority，又要满足C-new的majority</strong></li>
+</ul>
+<p>下图很好的说明了raft多节点成员变更的过程。该图中中间的三条线表示随时间流逝，集群所处状态的变化，即集群最开始处于C-old状态，然后用户发起了配置变更，此时leader产生C-old-new配置log，并向集群中所有节点复制该log，当C-old<strong>和</strong>C-new的多数节点都复制成功C-old-new配置log后，表示C-old-new被提交，此时集群处于过渡配置状态(joint consensus)，之后leader可以安全的产生C-new配置，然后将其复制到整个集群(<strong>在复制C-new时，集群处于过渡配置状态，所以此时计算quorum时，应该需要满足C-old和C-new的majority</strong>)。当C-new也被提交后，集群完成配置变更。</p>
+<p><img src="/raft-memeber-change/Image3.png" alt="aad2622eeefab2d9cdebb3e84c8a33bd.png"></p>
+<p>下图展示了用于5个节点的集群(其中一个节点为故障节点)，转换为7节点集群的过程。
+<img src="/raft-memeber-change/raft%E5%A4%A7%E8%AE%BA%E6%96%87-Page-6.png" alt="bca84e1fce90e32547a52179d3339694.png"></p>
+</div>
+                    <div class="post_footer">
+                        
+                        <div class="meta">
+                            <div class="info">
+                                <span class="field tags">
+                                    <i class="ri-stack-line"></i>
+                                    
+                                    <a href="https://zaorangyang.github.io/tags/raft/">raft</a>
+                                    
+                                    <a href="https://zaorangyang.github.io/tags/%E5%88%86%E5%B8%83%E5%BC%8F/">分布式</a>
+                                    
+                                    <a href="https://zaorangyang.github.io/tags/%E8%AE%BA%E6%96%87%E9%98%85%E8%AF%BB/">论文阅读</a>
+                                    
+                                </span>
+                            </div>
+                        </div>
+                        
+                    </div>
+                </div>
+                
+                
+                <div class="doc_comments"></div>
+                
+            </div>
+        </div>
+      </div>
+      <script src="https://utteranc.es/client.js"
+          repo="zaorangyang/zaorangyang.github.io"
+          issue-term="pathname"
+          theme="github-light"
+          crossorigin="anonymous"
+          async>
+      </script>
+
+      
+      
+    </div>
+    <a id="back_to_top" href="#" class="back_to_top"><i class="ri-arrow-up-s-line"></i></a>
+    <footer class="footer">
+    <div class="powered_by">
+        <a href="https://github.com/varkai/hugo-theme-zozo">Theme Zozo,</a>
+        <a href="http://www.gohugo.io/">Published with Hugo</a>
+    </div>
+
+    <div class="footer_slogan">
+        <span></span>
+    </div>
+</footer>
+
+    <script src="https://zaorangyang.github.io/js/jquery-3.5.1.min.js"></script>
+<link href="https://zaorangyang.github.io/css/fancybox.min.css" rel="stylesheet">
+<script src="https://zaorangyang.github.io/js/fancybox.min.js"></script>
+<script src="https://zaorangyang.github.io/js/zozo.js"></script>
+
+
+<script type="text/javascript" async
+    src="https://cdn.bootcss.com/mathjax/2.7.5/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+        MathJax.Hub.Config({
+            tex2jax: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\[\[', '\]\]']],
+                processEscapes: true,
+                processEnvironments: true,
+                skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+                TeX: {
+                    equationNumbers: { autoNumber: "AMS" },
+                    extensions: ["AMSmath.js", "AMSsymbols.js"]
+                }
+            }
+        });
+
+        MathJax.Hub.Queue(function () {
+            
+            
+            
+            var all = MathJax.Hub.getAllJax(), i;
+            for (i = 0; i < all.length; i += 1) {
+                all[i].SourceElement().parentNode.className += ' has-jax';
+            }
+        });
+    </script>
+
+<style>
+    code.has-jax {
+        font: inherit;
+        font-size: 100%;
+        background: inherit;
+        border: inherit;
+        color: #515151;
+    }
+</style>
+
+
+
+</body>
+
+</html>
