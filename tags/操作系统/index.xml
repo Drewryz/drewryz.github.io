@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>操作系统 on Zaorang&#39;s Blog</title>
+    <link>https://zaorangyang.github.io/tags/%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/</link>
+    <description>Recent content in 操作系统 on Zaorang&#39;s Blog</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Mon, 10 May 2021 19:36:21 +0800</lastBuildDate>
+    
+	<atom:link href="https://zaorangyang.github.io/tags/%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>AC-Key: Adaptive Caching for LSM-based Key-Value Stores论文笔记</title>
+      <link>https://zaorangyang.github.io/posts/ackey-paper/</link>
+      <pubDate>Mon, 10 May 2021 19:36:21 +0800</pubDate>
+      
+      <guid>https://zaorangyang.github.io/posts/ackey-paper/</guid>
+      <description>摘要 总体来说这篇论文受操作系统的ARC缓冲策略的启发，然后结合LSM元素的缓冲效率因子，提出了分层的自适应缓冲算法。该算法管理三种类型的Cache，key-value cache, key-pointer cache, block cache，可以自感知业务</description>
+    </item>
+    
+  </channel>
+</rss>

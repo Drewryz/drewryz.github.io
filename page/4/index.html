@@ -112,12 +112,12 @@
 
 <div class="post animated fadeInDown">
     <div class="post_title">
-        <h2><a href='/posts/rocksdb-write-path/'>RocksDB写流程梳理</a></h2>
+        <h2><a href='/posts/changes-in-mysql5.7.0-translate/'>[MySQL Release Notes] MySQL5.7.0翻译</a></h2>
     </div>
     
     <div class="list">
         <div class="post_content markdown">
-            <p>rocksdb的每次写入都以一个WriteBatch对象为载体，WriteBatch记录了要写入的所有数据。 写入数据的入口函数是：DBImpl::WriteImpl WriteImpl rocksdb将每个将要写入的Wr......</p>
+            <p>[MySQL Release Notes] MySQL5.7.0翻译 翻译自：https://dev.mysql.com/doc/relnotes/mysql/5.7/en/news-5-7-0.html 诊断记录(Diagnostics Notes) M......</p>
         </div>
     </div>
     
@@ -126,118 +126,13 @@
             <div class="info">
                 <span class="field">
                     <i class="ri-map-pin-time-line"></i>
-                    <span class="date">2021.05.02</span>
+                    <span class="date">2019.06.17</span>
                 </span>
                 
                 <span class="field tags">
                     <i class="ri-stack-line"></i>
                     
-                    <a href="https://zaorangyang.github.io/tags/%E6%95%B0%E6%8D%AE%E5%BA%93/">数据库</a>
-                    
-                    <a href="https://zaorangyang.github.io/tags/rocksdb/">rocksdb</a>
-                    
-                </span>
-                
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="post animated fadeInDown">
-    <div class="post_title">
-        <h2><a href='/posts/mongo-parallel-batch-lock/'>MongoDB跨机房自动failover：并行复制全局锁造成的QPS掉底原因分析与解决</a></h2>
-    </div>
-    
-    <div class="list">
-        <div class="post_content markdown">
-            <p>背景 MongoDB是一个分布式数据库，底层数据通过Raft协议复制，原生支持数据强一致性以及分布式事务，支持副本集自动failover。一个典型的MongoDB集群拓扑如下图所示： mongos是代理层......</p>
-        </div>
-    </div>
-    
-    <div class="post_footer">
-        <div class="meta">
-            <div class="info">
-                <span class="field">
-                    <i class="ri-map-pin-time-line"></i>
-                    <span class="date">2020.07.23</span>
-                </span>
-                
-                <span class="field tags">
-                    <i class="ri-stack-line"></i>
-                    
-                    <a href="https://zaorangyang.github.io/tags/%E6%95%B0%E6%8D%AE%E5%BA%93/">数据库</a>
-                    
-                    <a href="https://zaorangyang.github.io/tags/%E6%8D%89%E8%99%AB/">捉虫</a>
-                    
-                    <a href="https://zaorangyang.github.io/tags/mongo/">mongo</a>
-                    
-                    <a href="https://zaorangyang.github.io/tags/%E6%80%A7%E8%83%BD%E8%B0%83%E4%BC%98/">性能调优</a>
-                    
-                </span>
-                
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="post animated fadeInDown">
-    <div class="post_title">
-        <h2><a href='/posts/mongos-cursor-not-found/'>VIP引起的Mongos Cursor Not Found问题定位与解决方案</a></h2>
-    </div>
-    
-    <div class="list">
-        <div class="post_content markdown">
-            <p>现象 业务方反应查询数据时，mongo有时候会报Cursor not found的错误，该错误不只java dirver有出现，对于使用golang的业务，也有反馈: 集群架构如下图所示。LVS采用round-ro......</p>
-        </div>
-    </div>
-    
-    <div class="post_footer">
-        <div class="meta">
-            <div class="info">
-                <span class="field">
-                    <i class="ri-map-pin-time-line"></i>
-                    <span class="date">2020.05.17</span>
-                </span>
-                
-                <span class="field tags">
-                    <i class="ri-stack-line"></i>
-                    
-                    <a href="https://zaorangyang.github.io/tags/%E6%95%B0%E6%8D%AE%E5%BA%93/">数据库</a>
-                    
-                    <a href="https://zaorangyang.github.io/tags/%E7%BD%91%E7%BB%9C/">网络</a>
-                    
-                    <a href="https://zaorangyang.github.io/tags/mongo/">mongo</a>
-                    
-                </span>
-                
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="post animated fadeInDown">
-    <div class="post_title">
-        <h2><a href='/posts/cpp-lvalue-reference/'>为什么需要右值引用</a></h2>
-    </div>
-    
-    <div class="list">
-        <div class="post_content markdown">
-            <p>C++所有表达式和变量要么是左值，要么是右值。 左值表示非临时对象 右值指临时对象，它们只在当前的语句中有效。 在C++11之前，除了用常量引用绑定右值一个右值之外，右值不能被引用： const int &amp;a = 1; 这种情况下，右......</p>
-        </div>
-    </div>
-    
-    <div class="post_footer">
-        <div class="meta">
-            <div class="info">
-                <span class="field">
-                    <i class="ri-map-pin-time-line"></i>
-                    <span class="date">2019.12.30</span>
-                </span>
-                
-                <span class="field tags">
-                    <i class="ri-stack-line"></i>
-                    
-                    <a href="https://zaorangyang.github.io/tags/c&#43;&#43;/">c&#43;&#43;</a>
+                    <a href="https://zaorangyang.github.io/tags/mysql/">MySQL</a>
                     
                 </span>
                 
@@ -250,14 +145,10 @@
 <div class="pagination">
     
     
-    <a href="/" class="pre">
+    <a href="/page/3/" class="pre">
         返回上一页
     </a>
     
-    
-    <a href="/page/3/" class="next">
-        阅读更多文章
-    </a>
     
     
 </div>
