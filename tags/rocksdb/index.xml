@@ -20,5 +20,32 @@
       <description>介绍 由于SSD的几个特性，导致当前的LSM设计不太合理： 随机读写的性能和顺序读写的性能差异在SSD下没有HDD下那么明显 SSD内部有大量的并行机制，LSM并没有好好利用 (为什么说没有好好利用) 写入次数</description>
     </item>
     
+    <item>
+      <title>RocksDB Compaction源码分析</title>
+      <link>https://zaorangyang.github.io/posts/rocksdb-compaction/</link>
+      <pubDate>Thu, 06 May 2021 19:00:47 +0800</pubDate>
+      
+      <guid>https://zaorangyang.github.io/posts/rocksdb-compaction/</guid>
+      <description>前言 rocksdb有多种compaction策略，默认的compaction策略应该为leveled compaction，我们本次分析leveled compaction机制。本次分析主要涉及到几个问题</description>
+    </item>
+    
+    <item>
+      <title>RocksDB LRUCache梳理</title>
+      <link>https://zaorangyang.github.io/posts/rocksdb-lrucache/</link>
+      <pubDate>Wed, 05 May 2021 19:14:10 +0800</pubDate>
+      
+      <guid>https://zaorangyang.github.io/posts/rocksdb-lrucache/</guid>
+      <description>Overview 整体说来，rocksdb对于LRUCache的实现还是比较简单的，和我们平时见到的LRUCache基本一致，核心数据结构包括一个hashtable，用于存放cache所管理的数据，另一个数据结构为一</description>
+    </item>
+    
+    <item>
+      <title>RocksDB写流程梳理</title>
+      <link>https://zaorangyang.github.io/posts/rocksdb-write-path/</link>
+      <pubDate>Sun, 02 May 2021 18:34:33 +0800</pubDate>
+      
+      <guid>https://zaorangyang.github.io/posts/rocksdb-write-path/</guid>
+      <description>rocksdb的每次写入都以一个WriteBatch对象为载体，WriteBatch记录了要写入的所有数据。 写入数据的入口函数是：DBImpl::WriteImpl WriteImpl rocksdb将每个将要写入的Wr</description>
+    </item>
+    
   </channel>
 </rss>
