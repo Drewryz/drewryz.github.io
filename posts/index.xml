@@ -6,10 +6,19 @@
     <description>Recent content in Posts on Zaorang&#39;s Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Thu, 23 Jul 2020 17:47:57 +0800</lastBuildDate>
+    <lastBuildDate>Sun, 02 May 2021 18:34:33 +0800</lastBuildDate>
     
 	<atom:link href="https://zaorangyang.github.io/posts/index.xml" rel="self" type="application/rss+xml" />
     
+    
+    <item>
+      <title>RocksDB写流程梳理</title>
+      <link>https://zaorangyang.github.io/posts/rocksdb-write-path/</link>
+      <pubDate>Sun, 02 May 2021 18:34:33 +0800</pubDate>
+      
+      <guid>https://zaorangyang.github.io/posts/rocksdb-write-path/</guid>
+      <description>rocksdb的每次写入都以一个WriteBatch对象为载体，WriteBatch记录了要写入的所有数据。 写入数据的入口函数是：DBImpl::WriteImpl WriteImpl rocksdb将每个将要写入的Wr</description>
+    </item>
     
     <item>
       <title>MongoDB跨机房自动failover：并行复制全局锁造成的QPS掉底原因分析与解决</title>
