@@ -6,10 +6,19 @@
     <description>Recent content in rocksdb on Zaorang&#39;s Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Fri, 18 Jun 2021 09:31:29 +0800</lastBuildDate>
+    <lastBuildDate>Fri, 25 Jun 2021 09:35:20 +0800</lastBuildDate>
     
 	<atom:link href="https://zaorangyang.github.io/tags/rocksdb/index.xml" rel="self" type="application/rss+xml" />
     
+    
+    <item>
+      <title>RocksDB BlockBasedTable源码分析</title>
+      <link>https://zaorangyang.github.io/posts/rocksdb-blockbasedtable/</link>
+      <pubDate>Fri, 25 Jun 2021 09:35:20 +0800</pubDate>
+      
+      <guid>https://zaorangyang.github.io/posts/rocksdb-blockbasedtable/</guid>
+      <description>前言 RockDB将一个SST文件称为一个表，针对业务场景不同，RocksDB提供了多种类型的表，其中BlockBasedTable是默认的并且最常用的表类型。因为BlockBasedTable涉及到R</description>
+    </item>
     
     <item>
       <title>RocksDB文件结构</title>

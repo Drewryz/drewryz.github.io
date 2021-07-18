@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="zh-cn" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="author" content="zaorangyang" />
+	
+	
+	
+	<title>RocksDB BlockBasedTable源码分析 Zaorang&#39;s Blog</title>
+	
+    
+    
+    <meta name="description" content="前言 RockDB将一个SST文件称为一个表，针对业务场景不同，RocksDB提供了多种类型的表，其中BlockBasedTable是默认的并且最常用的表类型。因为BlockBasedTable涉及到R" />
+    
+
+    
+    
+    <meta name="keywords" content="数据库, 存储, 技术" />
+    
+
+	
+    
+    <link rel="shortcut icon" href="https://zaorangyang.github.io/images/favicon.ico" />
+
+    <link rel="stylesheet" type="text/css" media="screen" href="https://zaorangyang.github.io/css/normalize.css" />
+    <link rel="stylesheet" type="text/css" media="screen" href="https://cdn.jsdelivr.net/npm/animate.css@4.1.0/animate.min.css" />
+    <link rel="stylesheet" type="text/css" media="screen" href="https://zaorangyang.github.io/css/zozo.css" />
+	<link rel="stylesheet" type="text/css" media="screen" href="https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css" />
+    <link rel="stylesheet" type="text/css" media="screen" href="https://zaorangyang.github.io/css/highlight.css" />
+
+    
+    
+</head>
+
+
+<body>
+    <div class="main animate__animated animate__fadeInDown">
+        <div class="nav_container animated fadeInDown">
+    <div class="site_nav" id="site_nav">
+        <ul>
+            
+            <li>
+                <a href="/">首页</a>
+            </li>
+            
+            <li>
+                <a href="/posts/">归档</a>
+            </li>
+            
+            <li>
+                <a href="/tags/">标签</a>
+            </li>
+            
+            <li>
+                <a href="/about/me">关于</a>
+            </li>
+            
+        </ul>
+    </div>
+    <div class="menu_icon">
+        <a id="menu_icon"><i class="ri-menu-line"></i></a>
+    </div>
+</div>
+        <div class="header animated fadeInDown">
+    <div class="site_title_container">
+        <div class="site_title">
+            <h1>
+                <a href="https://zaorangyang.github.io/">
+                    <span>Zaorang&#39;s Blog</span>
+                </a>
+            </h1>
+        </div>
+        <div class="description">
+            <p class="sub_title">
+
+
+							</p>
+            <div class="my_socials">
+                
+                
+                <a href="https://github.com/zaorangyang" title="github" target="_blank"><i class="ri-github-fill"></i></a>
+                
+                
+                
+                <a href="mailto:zaorangy@gmail.com" title="mail" target="_blank"><i class="ri-mail-fill"></i></a>
+                
+                
+                
+                <a href="https://twitter.com/yu_yang_r" title="twitter" target="_blank"><i class="ri-twitter-fill"></i></a>
+                
+                
+                
+                <a href="https://www.zhihu.com/people/yangzaorang/posts" title="zhihu" target="_blank"><i class="ri-zhihu-fill"></i></a>
+                
+                
+                <a href="https://zaorangyang.github.io/index.xml" type="application/rss+xml" title="rss" target="_blank"><i
+                        class="ri-rss-fill"></i></a>
+            </div>
+        </div>
+    </div>
+</div>
+        <div class="content">
+            <div class="post_page">
+                <div class="post animate__animated animate__fadeInDown">
+                    <div class="post_title post_detail_title">
+                        <h2><a href='/posts/rocksdb-blockbasedtable/'>RocksDB BlockBasedTable源码分析</a></h2>
+                        <span class="date">2021.06.25</span>
+                    </div>
+                    <div class="post_content markdown"><h3 id="前言">前言</h3>
+<p>RockDB将一个SST文件称为一个表，针对业务场景不同，RocksDB提供了多种类型的表，其中BlockBasedTable是默认的并且最常用的表类型。因为BlockBasedTable涉及到RocksDB与磁盘的交互，其读写过程几乎处于RocksDB读写path最底层的位置，因此该类还是非常重要的。在RocksDB的codebase中，与BlockBasedTable相关的核心类有下面几个：</p>
+<ul>
+<li>BlockBasedTable, 该类封装了用于读取磁盘BlockBasedTable类型的SST表的逻辑。</li>
+<li>BlockBasedTableBuilder, 该类用于在磁盘上构建一个BlockBasedTable类型的SST表。</li>
+<li>BlockBasedTableFactory, RocksDB通过工厂方法模式来创建TableReader/TableBuilder, BlockBasedTableFactory是BlockBasedTable工厂方法的实现，用于创建BlockBasedTable/BlockBasedTableBuilder。</li>
+</ul>
+<p>BlockBasedTableBuilder与BlockBasedTableFactory逻辑比较简单，本文主要分析BlockBasedTable的实现。</p>
+<h3 id="blockbasedtable">BlockBasedTable</h3>
+<p>一个BlockBasedTable对象代表一个SST对象，RocksDB管理的磁盘上的数据是非覆写的，BlockBasedTable向上层提供了读取磁盘数据的接口。</p>
+<h4 id="核心数据域">核心数据域</h4>
+<p>BlockBasedTable的核心数据是一个BlockBasedTable::Rep结构体。该结构体主要field如下：</p>
+<pre><code>/*
+ * RandomAccessFileReader其实就是对磁盘上文件的封装，用于读取文件的内容
+ */
+unique_ptr&lt;RandomAccessFileReader&gt; file;
+
+/*
+ * 一个BlockBasedTable的数据在blockcache中，有相同的key前缀
+ * 这个前缀在linux系统下其实就是table文件的fd
+ */
+char cache_key_prefix[kMaxCacheKeyPrefixSize];
+
+/*
+ * index_reader和filter分别用于读取一个Table的index信息和filter信息
+ * 如果blockcache未开启，那么由BlockBasedTableReader持有index_reader和filter
+ */
+unique_ptr&lt;IndexReader&gt; index_reader;
+unique_ptr&lt;FilterBlockReader&gt; filter;
+
+/*
+ * filter block在SST文件中的位置
+ * TODO: 为什么filter block需要单独拎出来？index block呢
+ */
+BlockHandle filter_handle;
+
+/*
+ * 用于记录表的一些属性信息 
+ */
+std::shared_ptr&lt;const TableProperties&gt; table_properties;
+
+/*
+ * 当pin_l0_filter_and_index_blocks_in_cache开启时，Table对象记录filter和index在
+ * block中的handle以达到pin的效果
+ */
+CachableEntry&lt;FilterBlockReader&gt; filter_entry;
+CachableEntry&lt;IndexReader&gt; index_entry;
+</code></pre><p>BlockBasedTable的核心数据有一点需要注意：当blockcache未开启,或者禁止了cache_index_and_filter_blocks，此时filter block和index block的内存由BlockBasedTable自身通过<strong>index_reader和filter</strong>两个成员变量持有。如果blockcache开启，那么此时filter block和index block通过blockcache管理，index_reader和filter两个成员不再有用。最后，如果希望将将L0层的filter和block订在blockcache中，那么使用两个成员变量<strong>filter_entry和index_entry</strong>将Cache的Handle记录下来，避免blockcache的LRU语义将其释放掉。</p>
+<h4 id="核心方法">核心方法</h4>
+<h5 id="blockbasedtableopen">BlockBasedTable::Open</h5>
+<p>BlockBasedTable::Open的一个调用栈如下。
+<img src="/rocksdb-blockbasedtable/Image.png" alt="d2a129b7995abde3e287f1ecef913be7.png">
+BlockBasedTable::Open主要用于初始化BlockBasedTable::rep, 并预取table的index block和filter block，其函数签名如下：</p>
+<pre><code>static Status Open(const ImmutableCFOptions&amp; ioptions,
+                 const EnvOptions&amp; env_options,
+                 const BlockBasedTableOptions&amp; table_options,
+                 const InternalKeyComparator&amp; internal_key_comparator,
+                 unique_ptr&lt;RandomAccessFileReader&gt;&amp;&amp; file,
+                 uint64_t file_size, unique_ptr&lt;TableReader&gt;* table_reader,
+                 bool prefetch_index_and_filter_in_cache = true,
+                 bool skip_filters = false, int level = -1);
+</code></pre><p>参数列表中的table_reader为传出参数，成功Open则赋值table_reader，该函数的主要执行流程如下：</p>
+<ol>
+<li>读SST文件的Footer，用于判断打开的文件是否是合法的SST文件</li>
+<li>读index block</li>
+<li>读filter block</li>
+<li>读表properties</li>
+<li>如果开启了cache_index_and_filter_blocks，并且设置了预取index和filter 又或者该table属于L0层，则将index block和filter block预取到block cache中。</li>
+<li>如果未开启cache_index_and_filter_blocks，不会通过blockcache管理index/filter block，而是通过BlockBasedTable的成员变量，此时会预取这些block到成员变量中。</li>
+</ol>
+<h5 id="blockbasedtableclose">BlockBasedTable::Close</h5>
+<p>当需要读取的数据不在blockcache中，会调用Open方法打开一个BlockBasedTable用于数据的读取。根据上一节的内容，我们看到，在Open一张表时，会缓冲index block和filter block，那当一张表关闭时当然会释放掉这些数据。Close函数的代码如下：</p>
+<pre><code>void BlockBasedTable::Close() {
+  rep_-&gt;filter_entry.Release(rep_-&gt;table_options.block_cache.get());
+  rep_-&gt;index_entry.Release(rep_-&gt;table_options.block_cache.get());
+  rep_-&gt;range_del_entry.Release(rep_-&gt;table_options.block_cache.get());
+  // cleanup index and filter blocks to avoid accessing dangling pointer
+  if (!rep_-&gt;table_options.no_block_cache) {
+    char cache_key[kMaxCacheKeyPrefixSize + kMaxVarint64Length];
+    // Get the filter block key
+    auto key = GetCacheKey(rep_-&gt;cache_key_prefix, rep_-&gt;cache_key_prefix_size,
+                           rep_-&gt;filter_handle, cache_key);
+    rep_-&gt;table_options.block_cache.get()-&gt;Erase(key);
+    // Get the index block key
+    key = GetCacheKeyFromOffset(rep_-&gt;cache_key_prefix,
+                                rep_-&gt;cache_key_prefix_size,
+                                rep_-&gt;dummy_index_reader_offset, cache_key);
+    rep_-&gt;table_options.block_cache.get()-&gt;Erase(key);
+  }
+}
+</code></pre><p>Close函数对于pin到blockcache中的filter和index，首先做Release。接着为了避免table关闭后，仍有线程通过filter和index读取data block，Close将filter和block从blockcache中彻底删除。这里有一个细节，table关闭后，blockcache缓冲的该table的data block并没有做Erase。主要的原因是rocksdb需要通过index block访问data数据，但是data block读就读了，即使table关闭也没有影响。</p>
+<h5 id="blockbasedtableget">BlockBasedTable::Get</h5>
+<p>Get函数用于在table中根据caller指定的key检索对应的数据。其整个流程也比较简单：</p>
+<ol>
+<li>获取bloom filter，如果filter block不在blockcache中，则从文件中读取</li>
+<li>根据获取的filter，判断key是否在当前table中，不在就直接返回</li>
+<li>如果bloom filter判断数据可能在当前table中，那么构建IndexIterator。构建IndexIterator的过程需要读Index block，同样如果Index block不在blockcache中，那么需要读盘</li>
+<li>通过IndexIterator二分查找caller指定的key，然后定位到对应的data block</li>
+<li>如果data block不在blockcache中，那么读盘，然后将其Insert到blockcache中</li>
+<li>在读取到data block中检索caller指定的key</li>
+</ol>
+<p>BlockBasedTable::Get会多次与blockcache交互，交互的过程主要通过BlockBasedTable::MaybeLoadDataBlockToCache完成。MaybeLoadDataBlockToCache的函数签名如下。</p>
+<pre><code>Status BlockBasedTable::MaybeLoadDataBlockToCache(
+    Rep* rep, const ReadOptions&amp; ro, const BlockHandle&amp; handle,
+    Slice compression_dict, CachableEntry&lt;Block&gt;* block_entry, bool is_index) {
+  const bool no_io = (ro.read_tier == kBlockCacheTier)
+</code></pre><p>在该函数的参数列表中，handle记录了要读取的block在SST文件中的偏移，block_entry: 出参，记录了检索到的value。MaybeLoadDataBlockToCache从blockcache读数据，如果读不到则从SST文件中读取，并将其加入到blockcache中。</p>
+</div>
+                    <div class="post_footer">
+                        
+                        <div class="meta">
+                            <div class="info">
+                                <span class="field tags">
+                                    <i class="ri-stack-line"></i>
+                                    
+                                    <a href="https://zaorangyang.github.io/tags/rocksdb/">rocksdb</a>
+                                    
+                                    <a href="https://zaorangyang.github.io/tags/%E6%95%B0%E6%8D%AE%E5%BA%93/">数据库</a>
+                                    
+                                </span>
+                            </div>
+                        </div>
+                        
+                    </div>
+                </div>
+                
+                
+                <div class="doc_comments"></div>
+                
+            </div>
+        </div>
+      </div>
+      <script src="https://utteranc.es/client.js"
+          repo="zaorangyang/zaorangyang.github.io"
+          issue-term="pathname"
+          theme="github-light"
+          crossorigin="anonymous"
+          async>
+      </script>
+
+      
+      
+    </div>
+    <a id="back_to_top" href="#" class="back_to_top"><i class="ri-arrow-up-s-line"></i></a>
+    <footer class="footer">
+    <div class="powered_by">
+        <a href="https://github.com/varkai/hugo-theme-zozo">Theme Zozo,</a>
+        <a href="http://www.gohugo.io/">Published with Hugo</a>
+    </div>
+
+    <div class="footer_slogan">
+        <span></span>
+    </div>
+</footer>
+
+    <script src="https://zaorangyang.github.io/js/jquery-3.5.1.min.js"></script>
+<link href="https://zaorangyang.github.io/css/fancybox.min.css" rel="stylesheet">
+<script src="https://zaorangyang.github.io/js/fancybox.min.js"></script>
+<script src="https://zaorangyang.github.io/js/zozo.js"></script>
+
+
+<script type="text/javascript" async
+    src="https://cdn.bootcss.com/mathjax/2.7.5/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+        MathJax.Hub.Config({
+            tex2jax: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\[\[', '\]\]']],
+                processEscapes: true,
+                processEnvironments: true,
+                skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+                TeX: {
+                    equationNumbers: { autoNumber: "AMS" },
+                    extensions: ["AMSmath.js", "AMSsymbols.js"]
+                }
+            }
+        });
+
+        MathJax.Hub.Queue(function () {
+            
+            
+            
+            var all = MathJax.Hub.getAllJax(), i;
+            for (i = 0; i < all.length; i += 1) {
+                all[i].SourceElement().parentNode.className += ' has-jax';
+            }
+        });
+    </script>
+
+<style>
+    code.has-jax {
+        font: inherit;
+        font-size: 100%;
+        background: inherit;
+        border: inherit;
+        color: #515151;
+    }
+</style>
+
+
+
+</body>
+
+</html>
