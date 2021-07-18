@@ -112,12 +112,12 @@
 
 <div class="post animated fadeInDown">
     <div class="post_title">
-        <h2><a href='/posts/ackey-paper/'>AC-Key: Adaptive Caching for LSM-based Key-Value Stores论文笔记</a></h2>
+        <h2><a href='/posts/changes-in-mysql5.7.0-translate/'>[MySQL Release Notes] MySQL5.7.0翻译</a></h2>
     </div>
     
     <div class="list">
         <div class="post_content markdown">
-            <p>摘要 总体来说这篇论文受操作系统的ARC缓冲策略的启发，然后结合LSM元素的缓冲效率因子，提出了分层的自适应缓冲算法。该算法管理三种类型的Cache，key-value cache, key-pointer cache, block cache，可以自感知业务......</p>
+            <p>[MySQL Release Notes] MySQL5.7.0翻译 翻译自：https://dev.mysql.com/doc/relnotes/mysql/5.7/en/news-5-7-0.html 诊断记录(Diagnostics Notes) M......</p>
         </div>
     </div>
     
@@ -126,118 +126,13 @@
             <div class="info">
                 <span class="field">
                     <i class="ri-map-pin-time-line"></i>
-                    <span class="date">2021.05.10</span>
+                    <span class="date">2019.06.17</span>
                 </span>
                 
                 <span class="field tags">
                     <i class="ri-stack-line"></i>
                     
-                    <a href="https://zaorangyang.github.io/tags/%E8%AE%BA%E6%96%87%E9%98%85%E8%AF%BB/">论文阅读</a>
-                    
-                    <a href="https://zaorangyang.github.io/tags/%E6%95%B0%E6%8D%AE%E5%BA%93/">数据库</a>
-                    
-                    <a href="https://zaorangyang.github.io/tags/%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/">操作系统</a>
-                    
-                </span>
-                
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="post animated fadeInDown">
-    <div class="post_title">
-        <h2><a href='/posts/wisckey-paper/'>WiscKey论文阅读</a></h2>
-    </div>
-    
-    <div class="list">
-        <div class="post_content markdown">
-            <p>介绍 由于SSD的几个特性，导致当前的LSM设计不太合理： 随机读写的性能和顺序读写的性能差异在SSD下没有HDD下那么明显 SSD内部有大量的并行机制，LSM并没有好好利用 (为什么说没有好好利用) 写入次数......</p>
-        </div>
-    </div>
-    
-    <div class="post_footer">
-        <div class="meta">
-            <div class="info">
-                <span class="field">
-                    <i class="ri-map-pin-time-line"></i>
-                    <span class="date">2021.05.06</span>
-                </span>
-                
-                <span class="field tags">
-                    <i class="ri-stack-line"></i>
-                    
-                    <a href="https://zaorangyang.github.io/tags/%E6%95%B0%E6%8D%AE%E5%BA%93/">数据库</a>
-                    
-                    <a href="https://zaorangyang.github.io/tags/rocksdb/">rocksdb</a>
-                    
-                    <a href="https://zaorangyang.github.io/tags/%E8%AE%BA%E6%96%87%E9%98%85%E8%AF%BB/">论文阅读</a>
-                    
-                </span>
-                
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="post animated fadeInDown">
-    <div class="post_title">
-        <h2><a href='/posts/rocksdb-compaction/'>RocksDB Compaction源码分析</a></h2>
-    </div>
-    
-    <div class="list">
-        <div class="post_content markdown">
-            <p>前言 rocksdb有多种compaction策略，默认的compaction策略应该为leveled compaction，我们本次分析leveled compaction机制。本次分析主要涉及到几个问题......</p>
-        </div>
-    </div>
-    
-    <div class="post_footer">
-        <div class="meta">
-            <div class="info">
-                <span class="field">
-                    <i class="ri-map-pin-time-line"></i>
-                    <span class="date">2021.05.06</span>
-                </span>
-                
-                <span class="field tags">
-                    <i class="ri-stack-line"></i>
-                    
-                    <a href="https://zaorangyang.github.io/tags/%E6%95%B0%E6%8D%AE%E5%BA%93/">数据库</a>
-                    
-                    <a href="https://zaorangyang.github.io/tags/rocksdb/">rocksdb</a>
-                    
-                </span>
-                
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="post animated fadeInDown">
-    <div class="post_title">
-        <h2><a href='/posts/rocksdb-lrucache/'>RocksDB LRUCache梳理</a></h2>
-    </div>
-    
-    <div class="list">
-        <div class="post_content markdown">
-            <p>Overview 整体说来，rocksdb对于LRUCache的实现还是比较简单的，和我们平时见到的LRUCache基本一致，核心数据结构包括一个hashtable，用于存放cache所管理的数据，另一个数据结构为一......</p>
-        </div>
-    </div>
-    
-    <div class="post_footer">
-        <div class="meta">
-            <div class="info">
-                <span class="field">
-                    <i class="ri-map-pin-time-line"></i>
-                    <span class="date">2021.05.05</span>
-                </span>
-                
-                <span class="field tags">
-                    <i class="ri-stack-line"></i>
-                    
-                    <a href="https://zaorangyang.github.io/tags/%E6%95%B0%E6%8D%AE%E5%BA%93/">数据库</a>
-                    
-                    <a href="https://zaorangyang.github.io/tags/rocksdb/">rocksdb</a>
+                    <a href="https://zaorangyang.github.io/tags/mysql/">MySQL</a>
                     
                 </span>
                 
@@ -250,14 +145,10 @@
 <div class="pagination">
     
     
-    <a href="/" class="pre">
+    <a href="/page/4/" class="pre">
         返回上一页
     </a>
     
-    
-    <a href="/page/3/" class="next">
-        阅读更多文章
-    </a>
     
     
 </div>
