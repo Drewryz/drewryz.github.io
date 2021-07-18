@@ -6,10 +6,19 @@
     <description>Recent content on Zaorang&#39;s Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Sun, 06 Jun 2021 19:20:32 +0800</lastBuildDate>
+    <lastBuildDate>Fri, 18 Jun 2021 09:31:29 +0800</lastBuildDate>
     
 	<atom:link href="https://zaorangyang.github.io/index.xml" rel="self" type="application/rss+xml" />
     
+    
+    <item>
+      <title>RocksDB文件结构</title>
+      <link>https://zaorangyang.github.io/posts/rocksdb-table-format/</link>
+      <pubDate>Fri, 18 Jun 2021 09:31:29 +0800</pubDate>
+      
+      <guid>https://zaorangyang.github.io/posts/rocksdb-table-format/</guid>
+      <description>overview 本文总结于：https://github.com/facebook/rocksdb/wiki/Rocksdb-BlockBasedTable-Format 整体上来说sst文件的结构如下： &amp;lt;beginning_of_file&amp;gt; [data block 1] [data block</description>
+    </item>
     
     <item>
       <title>浅谈Raft配置变更(成员变更)策略</title>

@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="zh-cn" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="author" content="zaorangyang" />
+	
+	
+	
+	<title>RocksDB文件结构 Zaorang&#39;s Blog</title>
+	
+    
+    
+    <meta name="description" content="overview 本文总结于：https://github.com/facebook/rocksdb/wiki/Rocksdb-BlockBasedTable-Format 整体上来说sst文件的结构如下： &amp;lt;beginning_of_file&amp;gt; [data block 1] [data block" />
+    
+
+    
+    
+    <meta name="keywords" content="数据库, 存储, 技术" />
+    
+
+	
+    
+    <link rel="shortcut icon" href="https://zaorangyang.github.io/images/favicon.ico" />
+
+    <link rel="stylesheet" type="text/css" media="screen" href="https://zaorangyang.github.io/css/normalize.css" />
+    <link rel="stylesheet" type="text/css" media="screen" href="https://cdn.jsdelivr.net/npm/animate.css@4.1.0/animate.min.css" />
+    <link rel="stylesheet" type="text/css" media="screen" href="https://zaorangyang.github.io/css/zozo.css" />
+	<link rel="stylesheet" type="text/css" media="screen" href="https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css" />
+    <link rel="stylesheet" type="text/css" media="screen" href="https://zaorangyang.github.io/css/highlight.css" />
+
+    
+    
+</head>
+
+
+<body>
+    <div class="main animate__animated animate__fadeInDown">
+        <div class="nav_container animated fadeInDown">
+    <div class="site_nav" id="site_nav">
+        <ul>
+            
+            <li>
+                <a href="/">首页</a>
+            </li>
+            
+            <li>
+                <a href="/posts/">归档</a>
+            </li>
+            
+            <li>
+                <a href="/tags/">标签</a>
+            </li>
+            
+            <li>
+                <a href="/about/me">关于</a>
+            </li>
+            
+        </ul>
+    </div>
+    <div class="menu_icon">
+        <a id="menu_icon"><i class="ri-menu-line"></i></a>
+    </div>
+</div>
+        <div class="header animated fadeInDown">
+    <div class="site_title_container">
+        <div class="site_title">
+            <h1>
+                <a href="https://zaorangyang.github.io/">
+                    <span>Zaorang&#39;s Blog</span>
+                </a>
+            </h1>
+        </div>
+        <div class="description">
+            <p class="sub_title">
+
+
+							</p>
+            <div class="my_socials">
+                
+                
+                <a href="https://github.com/zaorangyang" title="github" target="_blank"><i class="ri-github-fill"></i></a>
+                
+                
+                
+                <a href="mailto:zaorangy@gmail.com" title="mail" target="_blank"><i class="ri-mail-fill"></i></a>
+                
+                
+                
+                <a href="https://twitter.com/yu_yang_r" title="twitter" target="_blank"><i class="ri-twitter-fill"></i></a>
+                
+                
+                
+                <a href="https://www.zhihu.com/people/yangzaorang/posts" title="zhihu" target="_blank"><i class="ri-zhihu-fill"></i></a>
+                
+                
+                <a href="https://zaorangyang.github.io/index.xml" type="application/rss+xml" title="rss" target="_blank"><i
+                        class="ri-rss-fill"></i></a>
+            </div>
+        </div>
+    </div>
+</div>
+        <div class="content">
+            <div class="post_page">
+                <div class="post animate__animated animate__fadeInDown">
+                    <div class="post_title post_detail_title">
+                        <h2><a href='/posts/rocksdb-table-format/'>RocksDB文件结构</a></h2>
+                        <span class="date">2021.06.18</span>
+                    </div>
+                    <div class="post_content markdown"><h3 id="overview">overview</h3>
+<p>本文总结于：https://github.com/facebook/rocksdb/wiki/Rocksdb-BlockBasedTable-Format</p>
+<p>整体上来说sst文件的结构如下：</p>
+<pre><code>&lt;beginning_of_file&gt;
+[data block 1]
+[data block 2]
+...
+[data block N]
+[meta block 1: filter block]                  (see section: &quot;filter&quot; Meta Block)
+[meta block 2: index block]
+[meta block 3: compression dictionary block]  (see section: &quot;compression dictionary&quot; Meta Block)
+[meta block 4: range deletion block]          (see section: &quot;range deletion&quot; Meta Block)
+[meta block 5: stats block]                   (see section: &quot;properties&quot; Meta Block)
+...
+[meta block K: future extended block]  (we may add more meta blocks in the future)
+[metaindex block]
+[Footer]                               (fixed size; starts at file_size - sizeof(Footer))
+&lt;end_of_file&gt;
+</code></pre><ul>
+<li>kv数据对按顺序排布，并且被分割成一些列的数据块。数据区域排布在文件前面。数据块的组织方式参见block_builder.cc。</li>
+<li>在数据域之后，存储的是meta域。meta域存储了多种类型的meta块。</li>
+<li>meta域后，存储的是metaindex块。metaindex块用于索引meta块。类似这种形式：</li>
+</ul>
+<pre><code>meta_name1, offset, size
+meta_name2, offset, size
+... ...
+</code></pre><ul>
+<li>在文件的末尾是footer域，类似wiredtiger/innodb的file header，只不过rocksdb将其放到了文件末尾</li>
+</ul>
+<pre><code>// 存储metaindex块的偏移
+metaindex_handle: char[p]; 
+// 存储index块的偏移。index块属于meta块的一种。rocksdb将其单独拎出来，应该是为了查询加速
+index_handle
+// padding
+padding:
+// magic
+magic:
+</code></pre><h3 id="index块">Index块</h3>
+<p>Index块用于查找数据。查找的过程通过二分查找。一个文件可能包含一个或者多个索引块。索引块的具体格式参见：https://github.com/facebook/rocksdb/wiki/Index-Block-Format
+每一个data块在Index块中都有一个entry。这个entry是一个二元组。第一个元素记录了data块的最后一个key?，第二个元素记录了data块的偏移和size。</p>
+<h4 id="partitioned-index">Partitioned Index</h4>
+<p>所谓Partitioned Index指的是两层索引，也就是说第一层index块entry指向的不是数据块，而是第二层索引块。第二层索引块的entry记录的才是数据块。这样一个sst文件可以装下更多数据，并且第一层index块有更高的扇出。</p>
+<h4 id="index块中的key">Index块中的key</h4>
+<p>Index块中的key在前一个block块的最后一个key与下一个block块的第一个key之间。如果两个相邻数据块的key如下：
+aa aac aade abc abccccab || abd abdd &hellip;<br>
+那么Index块关于上面例子中第一个数据块的key在[abccccab, abd)范围内。为了节省Index块的空间，可以通过算法选择size最小的key。</p>
+<h4 id="单独的索引块">单独的索引块</h4>
+<p>在rocksdb5.14之前，BlockBasedTableOptions::format_version=2时，index块和数据块的格式是一致的。即:</p>
+<pre><code>// seq应该用于前缀压缩使用
+(&lt;user_key, seq&gt;, value)
+</code></pre><p>5.14以后index块的数据格式发生了变化。主要发生的变化是index块的重启点和data块的重启点不再相同。所谓重启点，即：</p>
+<blockquote>
+<p>BlockBuilder对key的存储是前缀压缩的，对于有序的字符串来讲，这能极大的减少存储空间。但是却增加了查找的时间复杂度，为了兼顾查找效率，每隔K个key，leveldb就不使用前缀压缩，而是存储整个key，这就是重启点（restartpoint）。
+在构建Block时，有参数Options::block_restart_interval定每隔几个key就直接存储一个重启点key。</p>
+</blockquote>
+<p>restart_interval配置的越低，内存开销越大但是检索速度更快，cpu使用率更小。</p>
+<ul>
+<li>在5.15引入format_version3：大多数情况下index块的seq字段是不需要的，因此seq字段可以省略 <strong>为什么</strong></li>
+<li>在5.16引入format_version4：每一个重启段内除了第一个元素后，后续的元素不再编码offset，而是通过delta的方式记录offset.eg:</li>
+</ul>
+<pre><code>restart_point   0: k, v (off, sz), k, v (delta-sz), ..., k, v (delta-sz)
+restart_point   1: k, v (off, sz), k, v (delta-sz), ..., k, v (delta-sz)
+...
+restart_point n-1: k, v (off, sz), k, v (delta-sz), ..., k, v (delta-sz)
+where, k is key, v is value, and its encoding is in parenthesis.
+</code></pre><h4 id="kbinarysearchwithfirstkey">kBinarySearchWithFirstKey</h4>
+<p>意思是rocksdb不需要通过读data块来获取data块的第一个key，该feature用于加速查找。做法是在index块每个entry中记录相应的key。eg:</p>
+<pre><code>restart_point   0:
+    k (block_key), v (block_offset, block_size, size_of_first_key, first_key)
+    k (block_key), v (delta_size, size_of_first_key, first_key)
+    k (block_key), v (delta_size, size_of_first_key, first_key)
+restart_point   1:
+    k (block_key), v (block_offset, block_size, size_of_first_key, first_key)
+    k (block_key), v (delta_size, size_of_first_key, first_key)
+    k (block_key), v (delta_size, size_of_first_key, first_key)
+...
+</code></pre><h4 id="filter-meta-block">filter meta block</h4>
+<p>用于存储布隆过滤器相关的数据</p>
+<h4 id="properties-meta-block">Properties Meta Block</h4>
+<p>存储属性信息的meta块。块内数据的组织类似这样：</p>
+<pre><code> [prop1]    (Each property is a key/value pair)
+ [prop2]
+ ...
+ [propN]
+</code></pre><h4 id="compression-dictionary-meta-block">Compression Dictionary Meta Block</h4>
+<p>与压缩相关的元数据块</p>
+</div>
+                    <div class="post_footer">
+                        
+                        <div class="meta">
+                            <div class="info">
+                                <span class="field tags">
+                                    <i class="ri-stack-line"></i>
+                                    
+                                    <a href="https://zaorangyang.github.io/tags/rocksdb/">rocksdb</a>
+                                    
+                                    <a href="https://zaorangyang.github.io/tags/%E6%95%B0%E6%8D%AE%E5%BA%93/">数据库</a>
+                                    
+                                </span>
+                            </div>
+                        </div>
+                        
+                    </div>
+                </div>
+                
+                
+                <div class="doc_comments"></div>
+                
+            </div>
+        </div>
+      </div>
+      <script src="https://utteranc.es/client.js"
+          repo="zaorangyang/zaorangyang.github.io"
+          issue-term="pathname"
+          theme="github-light"
+          crossorigin="anonymous"
+          async>
+      </script>
+
+      
+      
+    </div>
+    <a id="back_to_top" href="#" class="back_to_top"><i class="ri-arrow-up-s-line"></i></a>
+    <footer class="footer">
+    <div class="powered_by">
+        <a href="https://github.com/varkai/hugo-theme-zozo">Theme Zozo,</a>
+        <a href="http://www.gohugo.io/">Published with Hugo</a>
+    </div>
+
+    <div class="footer_slogan">
+        <span></span>
+    </div>
+</footer>
+
+    <script src="https://zaorangyang.github.io/js/jquery-3.5.1.min.js"></script>
+<link href="https://zaorangyang.github.io/css/fancybox.min.css" rel="stylesheet">
+<script src="https://zaorangyang.github.io/js/fancybox.min.js"></script>
+<script src="https://zaorangyang.github.io/js/zozo.js"></script>
+
+
+<script type="text/javascript" async
+    src="https://cdn.bootcss.com/mathjax/2.7.5/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+        MathJax.Hub.Config({
+            tex2jax: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\[\[', '\]\]']],
+                processEscapes: true,
+                processEnvironments: true,
+                skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+                TeX: {
+                    equationNumbers: { autoNumber: "AMS" },
+                    extensions: ["AMSmath.js", "AMSsymbols.js"]
+                }
+            }
+        });
+
+        MathJax.Hub.Queue(function () {
+            
+            
+            
+            var all = MathJax.Hub.getAllJax(), i;
+            for (i = 0; i < all.length; i += 1) {
+                all[i].SourceElement().parentNode.className += ' has-jax';
+            }
+        });
+    </script>
+
+<style>
+    code.has-jax {
+        font: inherit;
+        font-size: 100%;
+        background: inherit;
+        border: inherit;
+        color: #515151;
+    }
+</style>
+
+
+
+</body>
+
+</html>
