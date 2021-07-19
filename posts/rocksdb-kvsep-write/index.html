@@ -168,8 +168,8 @@ WiscKey的这种实现可是使得memtable的size更小，所以在内存中可�
 还有一个我能想到的原因是，如果用户写入一个kv对就立刻将value落盘，对于存在多版本的kv对的workload，会增加IO开销，但是对于社区的实现来说，因为在将memtable刷到磁盘时，如果不存在活跃的快照，多版本数据会被压缩为一个kv对，这样就可以规避这个问题。</p>
 <h5 id="flush时的故障处理">flush时的故障处理</h5>
 <p>在追踪flush的调用逻辑时，我一直在考虑一个异常情况：flush完成并且将元信息提交到manifest后，在清理WAL文件前，此时系统挂掉，然后系统重启恢复数据，系统中会不会存在内容相同的SST文件和blob文件。
-<img src="/rocksdb-kvsep-write/rocksdb-Page-3.jpg" alt="d4a448490e814d722ee20485bbda8dce.jpeg">
-经过追踪发现，rocksdb在将元信息提交到manifest时，会一并将WAL日志文件写入manifest文件，当系统异常重启后会跳过已经完成flush的SST对应的WAL日志。</p>
+<img src="/rocksdb-kvsep-write/rocksdb-Page-3.jpg" alt="d4a448490e814d722ee20485bbda8dce.jpeg"></p>
+<p>经过追踪发现，rocksdb在将元信息提交到manifest时，会一并将WAL日志文件写入manifest文件，当系统异常重启后会跳过已经完成flush的SST对应的WAL日志。</p>
 <h3 id="附录">附录</h3>
 <h4 id="integrated-blobdb配置项">integrated blobdb配置项</h4>
 <ul>
