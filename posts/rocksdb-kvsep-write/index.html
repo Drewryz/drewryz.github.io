@@ -161,9 +161,9 @@ FlushMemTableToOutputFile接下来调用FlushJob::Run函数，来完成此次flu
 </p>
 <h3 id="一些问题">一些问题</h3>
 <h5 id="为什么被刷到磁盘时才做kv分离">为什么被刷到磁盘时才做kv分离</h5>
-<p>对于WiscKey的kv分离实现来说，当用户写入一个kv对时，value会首先append到blob文件中，然后再将key写入LSM树中，参见下图：
-<img src="/rocksdb-kvsep-write/Image5.png" alt="75d95ef3dc57cde8fbbdcc1a35ac5850.png">
-WiscKey的这种实现可是使得memtable的size更小，所以在内存中可以装下更多的数据，那为什么rocksdb社区的kv分离实现没有采用这种方式呢？
+<p>对于WiscKey的kv分离实现来说，当用户写入一个kv对时，value会首先append到blob文件中，然后再将key写入LSM树中，参见下图：</p>
+<p><img src="/rocksdb-kvsep-write/Image5.png" alt="75d95ef3dc57cde8fbbdcc1a35ac5850.png"></p>
+<p>WiscKey的这种实现可是使得memtable的size更小，所以在内存中可以装下更多的数据，那为什么rocksdb社区的kv分离实现没有采用这种方式呢？
 我询问了rocksdb社区kv分离feature的作者Levi Tamasi，根据他的叙述最主要的原因是将blob文件的写入放入到flush后台线程完成，可以避免多个用户写线程对blob文件的争抢，减少锁竞争。考虑一下，rocksdb支持多个线程并发写memtable，如果在写memtable时，就做kv分离，那么会有多个线程抢占同一个blob文件，而如果将blob的写操作放入后台线程，因为rocksdb的flush动作是串行的，所以可以做到写blob文件时无需加锁。
 还有一个我能想到的原因是，如果用户写入一个kv对就立刻将value落盘，对于存在多版本的kv对的workload，会增加IO开销，但是对于社区的实现来说，因为在将memtable刷到磁盘时，如果不存在活跃的快照，多版本数据会被压缩为一个kv对，这样就可以规避这个问题。</p>
 <h5 id="flush时的故障处理">flush时的故障处理</h5>
