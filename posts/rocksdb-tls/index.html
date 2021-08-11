@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="zh-cn" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="author" content="zaorangyang" />
+	
+	
+	
+	<title>无锁编程实践：RocksDB ThreadLocalPtr剖析 Zaorang&#39;s Blog</title>
+	
+    
+    
+    <meta name="description" content="前言 RocksDB被广泛应用在各种高性能场景中，如何能让向上层提供的接口拥有更小的延迟，是RocksDB一直追求的目标之一。对于一个系统来说，暂时忽略长尾场景，将critical path的时延降低是获" />
+    
+
+    
+    
+    <meta name="keywords" content="数据库, 存储, 技术" />
+    
+
+	
+    
+    <link rel="shortcut icon" href="https://zaorangyang.github.io/images/favicon.ico" />
+
+    <link rel="stylesheet" type="text/css" media="screen" href="https://zaorangyang.github.io/css/normalize.css" />
+    <link rel="stylesheet" type="text/css" media="screen" href="https://cdn.jsdelivr.net/npm/animate.css@4.1.0/animate.min.css" />
+    <link rel="stylesheet" type="text/css" media="screen" href="https://zaorangyang.github.io/css/zozo.css" />
+	<link rel="stylesheet" type="text/css" media="screen" href="https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css" />
+    <link rel="stylesheet" type="text/css" media="screen" href="https://zaorangyang.github.io/css/highlight.css" />
+
+    
+    
+</head>
+
+
+<body>
+    <div class="main animate__animated animate__fadeInDown">
+        <div class="nav_container animated fadeInDown">
+    <div class="site_nav" id="site_nav">
+        <ul>
+            
+            <li>
+                <a href="/">首页</a>
+            </li>
+            
+            <li>
+                <a href="/posts/">归档</a>
+            </li>
+            
+            <li>
+                <a href="/tags/">标签</a>
+            </li>
+            
+            <li>
+                <a href="/about/me">关于</a>
+            </li>
+            
+        </ul>
+    </div>
+    <div class="menu_icon">
+        <a id="menu_icon"><i class="ri-menu-line"></i></a>
+    </div>
+</div>
+        <div class="header animated fadeInDown">
+    <div class="site_title_container">
+        <div class="site_title">
+            <h1>
+                <a href="https://zaorangyang.github.io/">
+                    <span>Zaorang&#39;s Blog</span>
+                </a>
+            </h1>
+        </div>
+        <div class="description">
+            <p class="sub_title">
+
+
+							</p>
+            <div class="my_socials">
+                
+                
+                <a href="https://github.com/zaorangyang" title="github" target="_blank"><i class="ri-github-fill"></i></a>
+                
+                
+                
+                <a href="mailto:zaorangy@gmail.com" title="mail" target="_blank"><i class="ri-mail-fill"></i></a>
+                
+                
+                
+                <a href="https://twitter.com/yu_yang_r" title="twitter" target="_blank"><i class="ri-twitter-fill"></i></a>
+                
+                
+                
+                <a href="https://www.zhihu.com/people/yangzaorang/posts" title="zhihu" target="_blank"><i class="ri-zhihu-fill"></i></a>
+                
+                
+                <a href="https://zaorangyang.github.io/index.xml" type="application/rss+xml" title="rss" target="_blank"><i
+                        class="ri-rss-fill"></i></a>
+            </div>
+        </div>
+    </div>
+</div>
+        <div class="content">
+            <div class="post_page">
+                <div class="post animate__animated animate__fadeInDown">
+                    <div class="post_title post_detail_title">
+                        <h2><a href='/posts/rocksdb-tls/'>无锁编程实践：RocksDB ThreadLocalPtr剖析</a></h2>
+                        <span class="date">2021.08.10</span>
+                    </div>
+                    <div class="post_content markdown"><h3 id="前言">前言</h3>
+<p>RocksDB被广泛应用在各种高性能场景中，如何能让向上层提供的接口拥有更小的延迟，是RocksDB一直追求的目标之一。对于一个系统来说，暂时忽略长尾场景，将critical path的时延降低是获取整个系统低延迟的重要手段。</p>
+<p>RocksDB使用Version系统用于维护当前DB的状态信息，SuperVersion作为Version系统的重要模块之一，需要被后台线程(compaction/flush)更新和前台用户线程读取，多线程访问形成了竞态条件，为了降低前台线程的访问延迟，RocksDB对SuperVersion模块使用TLS(Thread-Local-Storage)机制。</p>
+<p>本文首先简要介绍TLS的两种实现方式，然后介绍SuperVersion是什么以及RocksDB对其的访问模式，接着会讲述RocksDB对SuperVersion设计的并发访问协议。因为OS和编译器提供的TLS实现不够灵活，本文还会讲述RocksDB如何封装自身的ThreadLocalPtr实现，最后我会给出一点自己关于RocksDB并发访问协议的想法和问题。</p>
+<h3 id="tls">TLS</h3>
+<p>TLS全称为Thread-Local-Storage,也就是线程私有存储，这个概念广为人知。POSIX系统提供了TLS变量的创建接口，另外编译器也有TLS变量的实现机制，对于GCC编译器来说通过__thread关键词可以声明一个TLS变量。</p>
+<p>下面是POSIX系统接口的TLS实现：</p>
+<pre><code>// 创建一个thread-local变量，并且可以选择注册一个析构函数。当线程退出时，如果
+// key对应的value不为nullptr，则会将value作为地址传入析构函数。
+int pthread_key_create(pthread_key_t *keyp, void (*destructor)(void *));
+
+// 将当前线程的thread-local变量key的值设置为value
+int pthread_setspecific(pthread_key_t key, const void *value);
+
+// 获取thread-local变量key的值
+void *pthread_getspecific(pthread_key_t key);
+</code></pre><h4 id="rocksdb-threadlocalptr实现">RocksDB ThreadLocalPtr实现</h4>
+<p>以上说的两种TLS使用起来有不便之处，比如如果需要多个TLS变量，那么就需要定义多个TLS全局变量，如果一些TLS变量是运行时才确定的，那单靠这两种机制是无法做到的，另外有一种场景是RocksDB所需要的：所有线程的TLS变量可以被一个线程清空或者重置，靠这两种机制也无法实现。RocksDB在这两种TLS实现机制上，提供了更灵活的TLS实现。ThreadLocalPtr类就是RocksDB提供的TLS实现接口，使用的方法很简单：</p>
+<pre><code>// 定义一个tls变量
+ThreadLocalPtr tls;
+
+// 写入数据
+// thread1
+tls.Reset(reinterpret_cast&lt;int*&gt;(1))
+// thread2
+tls.Reset(reinterpret_cast&lt;int*&gt;(2))
+
+// 获取数据
+// thread1
+tls.Get() == reinterpret_cast&lt;int*&gt;(1)
+// thread2
+tls.Get() == reinterpret_cast&lt;int*&gt;(2)
+
+// 将所有线程存储的tls变量置为nullptr
+tls.Scrape(&amp;ptrs, nullptr);
+</code></pre><p>在RocksDB的codebase中，每次定义个ThreadLocalPtr对象，就可以将其看成定义了一个TLS变量，但事实上所有的ThreadLocalPtr对象都指向了唯一一个TLS变量：</p>
+<pre><code>class ThreadLocalPtr::StaticMeta {
+    ...
+    static __thread ThreadData* tls_;
+    ...
+}
+__thread ThreadData* ThreadLocalPtr::StaticMeta::tls_ = nullptr;
+</code></pre><p>ThreadLocalPtr::StaticMeta是一个单例对象。该对象的成员tls_是一个TLS变量，指向ThreadData类型。所有定义的ThreadLocalPtr对象都挂载在了tls_变量上。那么如何做到这一点呢：</p>
+<pre><code>struct ThreadData {
+  explicit ThreadData(ThreadLocalPtr::StaticMeta* _inst)
+    : entries(),
+      next(nullptr),
+      prev(nullptr),
+      inst(_inst) {}
+  std::vector&lt;Entry&gt; entries;
+  ThreadData* next;
+  ThreadData* prev;
+  ThreadLocalPtr::StaticMeta* inst;
+}
+</code></pre><p>ThreadData对象用于一个元素类型为Entry的vector，每次定义的ThreadLocalPtr对象都有一个id，该id对应于entries的索引，所以当需要获取一个ThreadLocalPtr的数据时，只需要通过ThreadData::entries[id]获取。
+整体来说，每个线程有一个线程局部变量ThreadData，里面包含了一组指针，用于指向不同ThreadLocalPtr对象指向的数据。另外，ThreadData之间相互通过指针串联起来，所有线程的TLS变量可以被一个线程清空或者重置，达到通知业务线程缓冲失效的效果。</p>
+<pre><code>---------------------------------------------------
+ |          | instance 1 | instance 2 | instnace 3 |
+ ---------------------------------------------------
+ | thread 1 |    void*   |    void*   |    void*   | &lt;- ThreadData
+ ---------------------------------------------------
+ | thread 2 |    void*   |    void*   |    void*   | &lt;- ThreadData
+ ---------------------------------------------------
+ | thread 3 |    void*   |    void*   |    void*   | &lt;- ThreadData
+
+</code></pre><h3 id="superversion">SuperVersion</h3>
+<p>RocksDB使用Version系统来管理自身的状态信息。比如当前系统管理了哪些列族，这些列族的memtable,immutalbe,SST磁盘文件信息等等。SuperVersion是RocksDB Version系统的重要模块之一，它记录了一个cf当前的状态信息。用户的前台线程通过SuperVersion获取必要的信息(memtable/immutable/sst等)完成数据的检索和更新。随着用户增删改查的进行，RocksDB会在后台做compaction和flush操作，这些操作会更改SuperVersion的信息，使之从一个状态转换成另一个状态。我们把用户的读操作看做前台的reader，更新cf的SuperVersion操作看做是后台的writer，那么reader和writer之间形成了一个临界区域。下图简单描述了RocksDB的Version体系，以及SuperVersion在Version系统中所处的位置。</p>
+<p><img src="/rocksdb-tls/DC9DDD06-DBDD-4762-97FF-46B65D5F9CF4.png" alt="1710bab2f318fa026ef156575524f111.png"></p>
+<h4 id="与superversion有关的几个重要函数">与SuperVersion有关的几个重要函数</h4>
+<p>InstallSuperVersion用于在改变cf的状态后(比如发生了flush或者compaciton)向cf注册一个新的SuperVersion对象，一般由compaction流程和flush流程调用。下面是一个SuperVersion被构建并且被Install的调用链路。</p>
+<ol>
+<li>BackgroundCallFlush</li>
+<li>BackgroundFlush。构建SuperVersionContext对象，并构建空的SuperVersion对象。</li>
+<li>FlushMemTablesToOutputFiles</li>
+<li>FlushMemTableToOutputFile</li>
+<li>InstallSuperVersionAndScheduleWork</li>
+<li>InstallSuperVersion</li>
+</ol>
+<p>InstallSuperVersion除了更新全局变量记录的superversion外，还会调用ResetThreadLocalSuperVersions将所有线程TLS变量记录的缓冲标识过期。标识过期的策略很简单，只是将所有线程的TLS变量记录的sv，更改为SuperVersion::kSVObsolete。</p>
+<pre><code>void ColumnFamilyData::InstallSuperVersion(
+    SuperVersionContext* sv_context, InstrumentedMutex* db_mutex,
+    const MutableCFOptions&amp; mutable_cf_options) {
+</code></pre><p>GetReferencedSuperVersion用于获取当前cf的SuperVersion，其先从tls中获取缓冲的sv，如果获取到的sv已经过期了，退化成加锁获取。注意从tls中获取缓冲sv时，还要将tls置为kSVInUse，以便告知writer。</p>
+<pre><code>SuperVersion* ColumnFamilyData::GetReferencedSuperVersion(DBImpl* db) 
+</code></pre><p>GetReferencedSuperVersion在获取tls变量时候，将其置为了kSVInUse，ReturnThreadLocalSuperVersion将更新本线程缓冲的信息。</p>
+<pre><code>bool ColumnFamilyData::ReturnThreadLocalSuperVersion(SuperVersion* sv)
+</code></pre><h3 id="superversion读写并发协议">SuperVersion读写并发协议</h3>
+<p>上文说到RockDB的前台线程(用户读操作)与后台线程(compaction/flush)都需要访问cf的SuperVersion变量，并且后台线程更新它，前台线程读取它。我们的需求是希望前台线程因为访问SuperVersion变量造成的时延越低越好，另外并不要求对于SuperVersion的读写严格线性，也就是说对SuperVersion来说，读操作不必阻塞写操作，写操作也不必阻塞读操作。
+对于这种场景最简单的方式就是持有一把SuperVersion的锁，每次访问都加锁，这种做法可以满足正确性，但是这种方法带来的锁开销太高，前台线程一定会因为上锁而造成时延增大。为了避免这个问题，RocksDB使用TLS变量来实现SuperVersion读写并发。其整体的做法是这样的，使用一个全局变量记录cf当前最新的SuperVersion变量，然后使用TLS变量为每个线程缓冲全局变量的副本，如果全局变量没有变化，那么每次reader线程直接读取本线程的TLS变量记录的SuperVersion即可。如果发生了状态变化，后台线程会更新全局变量，并将所有线程的TLS变量置为过期，reader再读取本地的TLS变量时，如果发现了过期会重新从全局变量读取最新的SuperVersion并将其更新到本线程的TLS。</p>
+<p>下图是后台线程与SuperVersion交互的时序图：</p>
+<p><img src="/rocksdb-tls/superversion.png" alt="8b03f6409d2c8f7f6add34d32a0c5936.png"></p>
+<p>reader与与SuperVersion交互的时序图:</p>
+<p><img src="/rocksdb-tls/superversion-2.png" alt="3c55d94e849658581fff2c39bdd72d62.png"></p>
+<p>reader持有的TLS变量过期重新加载全局数据的时序图：</p>
+<p><img src="/rocksdb-tls/superversion-3.png" alt="e0314224daa3645e1f2e1e56aed33fbd.png"></p>
+<p>reader在执行过程中TLS变量过期的时序图：</p>
+<p><img src="/rocksdb-tls/superversion-4.png" alt="1e09f86a148e4c832349aab4a1e9bf64.png"></p>
+<h3 id="一些想法和问题">一些想法和问题</h3>
+<p>因为对SuperVersion的访问处于critical path上，所以RocksDB这实现这一块的代码时才如此大费周章。针对如何实现SuperVersion的并发协议，我个人一直在思考有没有更简单的方法。</p>
+<p>想法1：直接用shared_ptr
+因为并不要求读写严格线性，那么writer无脑更新全局的shared_ptr<SuperVersion>就好，其他线程可以自由获取全局的shared_ptr<SuperVersion>，但是writer更新全局的shared_ptr<SuperVersion>的这个操作并不是原子的，这回造成问题。</p>
+<p>想法2：shared_ptr+原子读写
+如果writer和reader可以原子读写shared_ptr的内容，那么一切就会很好。但是目前C++似乎是难以支持这一特性的。</p>
+<p>还有一些问题需要澄清：</p>
+<ol>
+<li>操作系统是如何实现threadlocal功能的</li>
+<li>C++11提供的thread_local关键词是否和__thread关键词一样</li>
+</ol>
+<h4 id="问题">问题</h4>
+<ol>
+<li>操作系统是如何实现threadlocal功能的</li>
+<li>编译器也提供了__thread关键词用于声明一个threadlocal变量，那和操作系统的有什么关系</li>
+<li>C++11提供的thread_local关键词是否和__thread关键词一样，如果是的话，那么可以重构rocksdb的代码吗</li>
+</ol>
+</div>
+                    <div class="post_footer">
+                        
+                    </div>
+                </div>
+                
+                
+                <div class="doc_comments"></div>
+                
+            </div>
+        </div>
+      </div>
+      <script src="https://utteranc.es/client.js"
+          repo="zaorangyang/zaorangyang.github.io"
+          issue-term="pathname"
+          theme="github-light"
+          crossorigin="anonymous"
+          async>
+      </script>
+
+      
+      
+    </div>
+    <a id="back_to_top" href="#" class="back_to_top"><i class="ri-arrow-up-s-line"></i></a>
+    <footer class="footer">
+    <div class="powered_by">
+        <a href="https://github.com/varkai/hugo-theme-zozo">Theme Zozo,</a>
+        <a href="http://www.gohugo.io/">Published with Hugo</a>
+    </div>
+
+    <div class="footer_slogan">
+        <span></span>
+    </div>
+</footer>
+
+    <script src="https://zaorangyang.github.io/js/jquery-3.5.1.min.js"></script>
+<link href="https://zaorangyang.github.io/css/fancybox.min.css" rel="stylesheet">
+<script src="https://zaorangyang.github.io/js/fancybox.min.js"></script>
+<script src="https://zaorangyang.github.io/js/zozo.js"></script>
+
+
+<script type="text/javascript" async
+    src="https://cdn.bootcss.com/mathjax/2.7.5/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+        MathJax.Hub.Config({
+            tex2jax: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\[\[', '\]\]']],
+                processEscapes: true,
+                processEnvironments: true,
+                skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+                TeX: {
+                    equationNumbers: { autoNumber: "AMS" },
+                    extensions: ["AMSmath.js", "AMSsymbols.js"]
+                }
+            }
+        });
+
+        MathJax.Hub.Queue(function () {
+            
+            
+            
+            var all = MathJax.Hub.getAllJax(), i;
+            for (i = 0; i < all.length; i += 1) {
+                all[i].SourceElement().parentNode.className += ' has-jax';
+            }
+        });
+    </script>
+
+<style>
+    code.has-jax {
+        font: inherit;
+        font-size: 100%;
+        background: inherit;
+        border: inherit;
+        color: #515151;
+    }
+</style>
+
+
+
+</body>
+
+</html>
