@@ -19,26 +19,21 @@
   
   <url>
     <loc>https://zaorangyang.github.io/tags/rocksdb/</loc>
-    <lastmod>2021-07-04T09:40:36+08:00</lastmod>
-  </url>
-  
-  <url>
-    <loc>https://zaorangyang.github.io/posts/rocksdb-kvsep-write/</loc>
-    <lastmod>2021-07-04T09:40:36+08:00</lastmod>
-  </url>
-  
-  <url>
-    <loc>https://zaorangyang.github.io/tags/</loc>
-    <lastmod>2021-07-04T09:40:36+08:00</lastmod>
-  </url>
-  
-  <url>
-    <loc>https://zaorangyang.github.io/tags/%E6%95%B0%E6%8D%AE%E5%BA%93/</loc>
-    <lastmod>2021-07-04T09:40:36+08:00</lastmod>
+    <lastmod>2021-06-25T09:35:20+08:00</lastmod>
   </url>
   
   <url>
     <loc>https://zaorangyang.github.io/posts/rocksdb-blockbasedtable/</loc>
+    <lastmod>2021-06-25T09:35:20+08:00</lastmod>
+  </url>
+  
+  <url>
+    <loc>https://zaorangyang.github.io/tags/</loc>
+    <lastmod>2021-06-25T09:35:20+08:00</lastmod>
+  </url>
+  
+  <url>
+    <loc>https://zaorangyang.github.io/tags/%E6%95%B0%E6%8D%AE%E5%BA%93/</loc>
     <lastmod>2021-06-25T09:35:20+08:00</lastmod>
   </url>
   

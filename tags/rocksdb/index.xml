@@ -6,19 +6,10 @@
     <description>Recent content in rocksdb on Zaorang&#39;s Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Sun, 04 Jul 2021 09:40:36 +0800</lastBuildDate>
+    <lastBuildDate>Fri, 25 Jun 2021 09:35:20 +0800</lastBuildDate>
     
 	<atom:link href="https://zaorangyang.github.io/tags/rocksdb/index.xml" rel="self" type="application/rss+xml" />
     
-    
-    <item>
-      <title>RocksDB KV分离写操作实现分析</title>
-      <link>https://zaorangyang.github.io/posts/rocksdb-kvsep-write/</link>
-      <pubDate>Sun, 04 Jul 2021 09:40:36 +0800</pubDate>
-      
-      <guid>https://zaorangyang.github.io/posts/rocksdb-kvsep-write/</guid>
-      <description>Overview 整体上官方的kv分离实现，key和value只有被刷到磁盘时才分离，因此kv分离的写逻辑主要嵌入到了flush memtable过程中。本文将对社区的integrated blobdb的实现做出分析，分</description>
-    </item>
     
     <item>
       <title>RocksDB BlockBasedTable源码分析</title>
